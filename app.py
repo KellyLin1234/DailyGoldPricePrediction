@@ -1,67 +1,82 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
 
-from utils.preprocessing import clean_data
+# ======================
+# PAGE CONFIG
+# ======================
+st.set_page_config(page_title="Gold Price Prediction", layout="wide")
 
-st.title("📊 Gold Price Prediction System")
+st.title("📈 Daily Gold Price Prediction App")
+st.write("Predict gold prices using Machine Learning (Random Forest as main model)")
 
-# Load data
-df = pd.read_csv("data/Gold Price.csv")
-df = clean_data(df)
+# ======================
+# LOAD MODEL + SCALER
+# ======================
+@st.cache_resource
+def load_model():
+    model = joblib.load("models/random_forest_model.pkl")
+    scaler = joblib.load("models/scaler.pkl")
+    return model, scaler
 
-st.subheader("Dataset")
-st.write(df.head())
+model, scaler = load_model()
 
-# Model selection
-model_choice = st.selectbox(
-    "Choose Model",
-    ["Random Forest", "Gradient Boosting", "XGBoost", "LSTM", "Hybrid"]
-)
+# ======================
+# LOAD DATA (optional for visualization)
+# ======================
+@st.cache_data
+def load_data():
+    df = pd.read_csv("data/Gold Price.csv")
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.sort_values("Date")
+    return df
 
-# Load models
-rf = joblib.load("models/random_forest.pkl")
-gb = joblib.load("models/gb_model.pkl")
-xgb = joblib.load("models/xgb_model.pkl")
+df = load_data()
 
-lstm = tf.keras.models.load_model("models/lstm_model.h5")
-hybrid_rf = joblib.load("models/hybrid_rf.pkl")
-hybrid_lstm = tf.keras.models.load_model("models/hybrid_lstm.h5")
+# ======================
+# SIDEBAR INPUT
+# ======================
+st.sidebar.header("🔧 Input Features")
 
-# Input
-st.subheader("Input Features")
+# adjust these based on YOUR dataset features
+open_price = st.sidebar.number_input("Open Price", value=2000.0)
+high_price = st.sidebar.number_input("High Price", value=2010.0)
+low_price = st.sidebar.number_input("Low Price", value=1990.0)
+volume = st.sidebar.number_input("Volume", value=100000.0)
 
-open_p = st.number_input("Open")
-high_p = st.number_input("High")
-low_p = st.number_input("Low")
-volume = st.number_input("Volume")
-chg = st.number_input("Chg%")
+# feature array (IMPORTANT: must match training order)
+features = np.array([[open_price, high_price, low_price, volume]])
 
-date = st.date_input("Date")
+# ======================
+# PREDICTION
+# ======================
+if st.button("Predict Gold Price"):
+    try:
+        features_scaled = scaler.transform(features)
+        prediction = model.predict(features_scaled)
 
-if st.button("Predict"):
+        st.success(f"💰 Predicted Gold Price: {prediction[0]:.2f}")
 
-    date_val = pd.Timestamp(date).toordinal()
+    except Exception as e:
+        st.error(f"Error in prediction: {e}")
 
-    features = np.array([[date_val, open_p, high_p, low_p, volume, chg]])
+# ======================
+# DATA VISUALIZATION
+# ======================
+st.subheader("📊 Gold Price Trend")
 
-    if model_choice == "Random Forest":
-        pred = rf.predict([[open_p]])[0]  # based on your lag model
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(df["Date"], df["Price"], color="gold")
+ax.set_title("Gold Price Over Time")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
+st.pyplot(fig)
 
-    elif model_choice == "Gradient Boosting":
-        pred = gb.predict(features)[0]
-
-    elif model_choice == "XGBoost":
-        pred = xgb.predict(features)[0]
-
-    elif model_choice == "LSTM":
-        st.warning("LSTM uses sequence input — demo prediction only")
-        pred = "Use full sequence input (handled in backend)"
-
-    elif model_choice == "Hybrid":
-        st.warning("Hybrid uses LSTM + RF pipeline")
-        pred = "Run full pipeline in backend"
-
-    st.success(f"Predicted Price: {pred}")
+# ======================
+# MODEL INFO
+# ======================
+st.sidebar.markdown("### ℹ️ Model Info")
+st.sidebar.write("Model: Random Forest Regressor (Main)")
+st.sidebar.write("Scaler: MinMaxScaler")
