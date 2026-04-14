@@ -9,8 +9,8 @@ import joblib
 # ======================
 st.set_page_config(page_title="Gold Price Forecast", layout="wide")
 
-st.title("💰 Gold Price Prediction App (XGBoost)")
-st.write("10-Year Forecast using Machine Learning (XGBoost Model)")
+st.title("💰 Gold Price Prediction App (XGBoost - Lag1 Only)")
+st.write("10-Year Forecast using simplified ML model")
 
 # ======================
 # LOAD MODEL
@@ -36,70 +36,45 @@ df = load_data()
 # ======================
 # SIDEBAR
 # ======================
-st.sidebar.header("Settings")
-
 years = st.sidebar.slider("Years to Predict", 1, 10, 10)
 show_data = st.sidebar.checkbox("Show Data")
-show_plot = st.sidebar.checkbox("Show Chart")
+show_chart = st.sidebar.checkbox("Show Chart")
 
 # ======================
-# DATA DISPLAY
+# DATA VIEW
 # ======================
 if show_data:
-    st.subheader("📊 Dataset")
     st.dataframe(df)
 
-if show_plot:
-    st.subheader("📈 Gold Price History")
-
-    fig, ax = plt.subplots(figsize=(10, 5))
+if show_chart:
+    fig, ax = plt.subplots()
     ax.plot(df["Date"], df["Price"])
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Price")
-    ax.set_title("Gold Price Trend")
-
+    ax.set_title("Gold Price History")
     st.pyplot(fig)
 
 # ======================
-# FEATURE ENGINEERING
-# MUST MATCH TRAINING FEATURES
-# ======================
-df["Lag1"] = df["Price"].shift(1)
-df["Lag2"] = df["Price"].shift(2)
-df["Lag3"] = df["Price"].shift(3)
-df["Lag7"] = df["Price"].shift(7)
-df["MA7"] = df["Price"].rolling(7).mean()
-
-df = df.dropna()
-
-# ======================
-# PREDICTION
+# FORECAST
 # ======================
 if st.button("🔮 Predict 10-Year Forecast"):
 
     steps = years * 365
     predictions = []
 
-    last_values = df["Price"].iloc[-7:].values  # last 7 days window
+    # last known price
+    last_price = df["Price"].iloc[-1]
 
     progress = st.progress(0)
 
     for i in range(steps):
 
-        lag1 = last_values[-1]
-        lag2 = last_values[-2]
-        lag3 = last_values[-3]
-        lag7 = last_values[-7]
-        ma7 = np.mean(last_values[-7:])
-
-        X_input = np.array([[lag1, lag2, lag3, lag7, ma7]])
+        # ONLY LAG1 INPUT (FIXED)
+        X_input = pd.DataFrame({"Lag1": [last_price]})
 
         pred = model.predict(X_input)[0]
         predictions.append(pred)
 
-        # update rolling window
-        last_values = np.append(last_values, pred)
-        last_values = last_values[-7:]
+        # recursive update
+        last_price = pred
 
         if i % 100 == 0:
             progress.progress(i / steps)
@@ -117,7 +92,7 @@ if st.button("🔮 Predict 10-Year Forecast"):
     })
 
     # ======================
-    # RESULTS
+    # RESULT
     # ======================
     st.subheader("📊 10-Year Forecast Result")
     st.dataframe(forecast_df.tail(50))
@@ -127,15 +102,13 @@ if st.button("🔮 Predict 10-Year Forecast"):
     # ======================
     fig, ax = plt.subplots(figsize=(12, 5))
 
-    ax.plot(df["Date"], df["Price"], label="Historical", linewidth=2)
+    ax.plot(df["Date"], df["Price"], label="Historical")
     ax.plot(forecast_df["Date"], forecast_df["Predicted Price"],
             label="10-Year Forecast", linestyle="dashed")
 
-    ax.set_title("Gold Price 10-Year Forecast (XGBoost)")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Price")
+    ax.set_title("Gold Price 10-Year Forecast (XGBoost - Lag1)")
     ax.legend()
 
     st.pyplot(fig)
 
-    st.success("10-year forecast completed successfully!")
+    st.success("Forecast completed successfully!")
