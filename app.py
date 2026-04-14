@@ -1,34 +1,35 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
-import joblib
+import numpy as np
 import matplotlib.pyplot as plt
+import joblib
+
+from sklearn.preprocessing import MinMaxScaler
 
 # ======================
 # PAGE CONFIG
 # ======================
 st.set_page_config(page_title="Gold Price Prediction", layout="wide")
 
-st.title("📈 Daily Gold Price Prediction App")
-st.write("Predict gold prices using Machine Learning (Random Forest as main model)")
+st.title("💰 Gold Price Prediction App (Random Forest)")
+st.write("Predict future gold prices using Machine Learning (Random Forest Model)")
 
 # ======================
-# LOAD MODEL + SCALER
+# LOAD MODEL
 # ======================
 @st.cache_resource
 def load_model():
-    model = joblib.load("models/random_forest_model.pkl")
-    scaler = joblib.load("models/scaler.pkl")
-    return model, scaler
+    model = joblib.load("models/random_forest_model.pkl")  # change if needed
+    return model
 
-model, scaler = load_model()
+model = load_model()
 
 # ======================
-# LOAD DATA (optional for visualization)
+# LOAD DATA
 # ======================
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data/Gold Price.csv")
+    df = pd.read_csv("Gold Price.csv")  # change path if needed
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date")
     return df
@@ -36,47 +37,91 @@ def load_data():
 df = load_data()
 
 # ======================
-# SIDEBAR INPUT
+# SIDEBAR
 # ======================
-st.sidebar.header("🔧 Input Features")
+st.sidebar.header("📌 Settings")
 
-# adjust these based on YOUR dataset features
-open_price = st.sidebar.number_input("Open Price", value=2000.0)
-high_price = st.sidebar.number_input("High Price", value=2010.0)
-low_price = st.sidebar.number_input("Low Price", value=1990.0)
-volume = st.sidebar.number_input("Volume", value=100000.0)
+future_days = st.sidebar.slider("Days to Predict", 1, 60, 7)
 
-# feature array (IMPORTANT: must match training order)
-features = np.array([[open_price, high_price, low_price, volume]])
+show_data = st.sidebar.checkbox("Show Raw Data")
+show_plot = st.sidebar.checkbox("Show Price Chart")
+
+# ======================
+# DATA PREVIEW
+# ======================
+if show_data:
+    st.subheader("📊 Dataset")
+    st.dataframe(df)
+
+# ======================
+# BASIC PLOT
+# ======================
+if show_plot:
+    st.subheader("📈 Gold Price History")
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(df["Date"], df["Price"], label="Gold Price")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Price")
+    ax.legend()
+
+    st.pyplot(fig)
+
+# ======================
+# FEATURE ENGINEERING (simple lag example)
+# ======================
+df["Lag1"] = df["Price"].shift(1)
+df = df.dropna()
+
+X = df[["Lag1"]]
+y = df["Price"]
 
 # ======================
 # PREDICTION
 # ======================
-if st.button("Predict Gold Price"):
-    try:
-        features_scaled = scaler.transform(features)
-        prediction = model.predict(features_scaled)
+if st.button("🔮 Predict Future Prices"):
 
-        st.success(f"💰 Predicted Gold Price: {prediction[0]:.2f}")
+    last_value = df["Price"].values[-1]
+    predictions = []
 
-    except Exception as e:
-        st.error(f"Error in prediction: {e}")
+    input_value = np.array([[last_value]])
 
-# ======================
-# DATA VISUALIZATION
-# ======================
-st.subheader("📊 Gold Price Trend")
+    for _ in range(future_days):
+        pred = model.predict(input_value)[0]
+        predictions.append(pred)
+        input_value = np.array([[pred]])
 
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(df["Date"], df["Price"], color="gold")
-ax.set_title("Gold Price Over Time")
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
-st.pyplot(fig)
+    # Future dates
+    future_dates = pd.date_range(
+        start=df["Date"].iloc[-1],
+        periods=future_days + 1,
+        freq="D"
+    )[1:]
 
-# ======================
-# MODEL INFO
-# ======================
-st.sidebar.markdown("### ℹ️ Model Info")
-st.sidebar.write("Model: Random Forest Regressor (Main)")
-st.sidebar.write("Scaler: MinMaxScaler")
+    # ======================
+    # RESULT TABLE
+    # ======================
+    result_df = pd.DataFrame({
+        "Date": future_dates,
+        "Predicted Price": predictions
+    })
+
+    st.subheader("📉 Future Predictions")
+    st.dataframe(result_df)
+
+    # ======================
+    # PLOT RESULT
+    # ======================
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    ax2.plot(df["Date"], df["Price"], label="Historical")
+    ax2.plot(result_df["Date"], result_df["Predicted Price"],
+             label="Prediction", linestyle="dashed")
+
+    ax2.set_title("Gold Price Forecast")
+    ax2.set_xlabel("Date")
+    ax2.set_ylabel("Price")
+    ax2.legend()
+
+    st.pyplot(fig2)
+
+    st.success("Prediction completed successfully!")
