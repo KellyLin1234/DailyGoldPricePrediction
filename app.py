@@ -106,7 +106,7 @@ if st.button("🔮 Predict 10-Year Forecast"):
     ax.plot(forecast_df["Date"], forecast_df["Predicted Price"],
             label="10-Year Forecast", linestyle="dashed")
 
-    ax.set_title("Gold Price 10-Year Forecast (XGBoost - Lag1)")
+    ax.set_title("Gold Price 10-Year Forecast")
     ax.legend()
 
     st.pyplot(fig)
