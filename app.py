@@ -5,21 +5,12 @@ import matplotlib.pyplot as plt
 import joblib
 
 # ======================
-# PAGE CONFIG
+# CONFIG
 # ======================
-st.set_page_config(
-    page_title="Gold Price Forecast",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Gold Price Forecast", layout="wide")
 
-# ======================
-# TITLE
-# ======================
 st.title("💰 Gold Price Forecast Dashboard")
-st.markdown("### XGBoost Model • 10-Year Prediction")
-
-st.divider()
+st.caption("Model: XGBoost (Lag1 Feature)")
 
 # ======================
 # LOAD MODEL
@@ -43,57 +34,32 @@ def load_data():
 df = load_data()
 
 # ======================
+# FEATURE
+# ======================
+df["Lag1"] = df["Price"].shift(1)
+df = df.dropna()
+
+# ======================
 # SIDEBAR
 # ======================
-st.sidebar.header("⚙️ Controls")
-
-years = st.sidebar.slider("Forecast Horizon (Years)", 1, 10, 10)
-show_data = st.sidebar.toggle("Show Dataset")
-show_chart = st.sidebar.toggle("Show Historical Chart")
+st.sidebar.header("Settings")
+years = st.sidebar.slider("Years to Predict", 1, 10, 10)
 
 # ======================
-# METRICS (TOP CARDS)
+# METRICS
 # ======================
-last_price = df["Price"].iloc[-1]
-avg_price = df["Price"].mean()
-max_price = df["Price"].max()
-
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Latest Gold Price", f"${last_price:,.2f}")
-col2.metric("Average Price", f"${avg_price:,.2f}")
-col3.metric("Peak Price", f"${max_price:,.2f}")
+col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
+col2.metric("Average Price", f"${df['Price'].mean():,.2f}")
+col3.metric("Max Price", f"${df['Price'].max():,.2f}")
 
 st.divider()
 
 # ======================
-# DATA TABLE
+# FORECAST
 # ======================
-if show_data:
-    st.subheader("📊 Dataset Preview")
-    st.dataframe(df, use_container_width=True)
-
-# ======================
-# HISTORICAL CHART
-# ======================
-if show_chart:
-    st.subheader("📈 Historical Gold Price Trend")
-
-    fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(df["Date"], df["Price"], linewidth=2)
-
-    ax.set_title("Gold Price Over Time")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Price")
-
-    st.pyplot(fig)
-
-# ======================
-# FORECAST BUTTON
-# ======================
-st.divider()
-
-if st.button("🚀 Generate 10-Year Forecast", use_container_width=True):
+if st.button("🔮 Generate Forecast"):
 
     steps = years * 365
     predictions = []
@@ -101,23 +67,17 @@ if st.button("🚀 Generate 10-Year Forecast", use_container_width=True):
     last_price = df["Price"].iloc[-1]
 
     progress = st.progress(0)
-    status = st.empty()
 
     for i in range(steps):
 
         X_input = pd.DataFrame({"Lag1": [last_price]})
-
         pred = model.predict(X_input)[0]
-        predictions.append(pred)
 
+        predictions.append(pred)
         last_price = pred
 
-        # progress update
         if i % 100 == 0:
             progress.progress(i / steps)
-            status.info(f"Generating forecast... {i}/{steps} days")
-
-    status.success("Forecast completed!")
 
     # ======================
     # FUTURE DATES
@@ -134,42 +94,33 @@ if st.button("🚀 Generate 10-Year Forecast", use_container_width=True):
     })
 
     # ======================
-    # RESULTS HEADER
+    # RESULTS
     # ======================
     st.subheader("📊 Forecast Results")
-
-    st.dataframe(forecast_df.tail(30), use_container_width=True)
+    st.dataframe(forecast_df.tail(30))
 
     # ======================
-    # FORECAST CHART
+    # CHART
     # ======================
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(12, 5))
 
-    ax.plot(df["Date"], df["Price"], label="Historical", linewidth=2)
-    ax.plot(
-        forecast_df["Date"],
-        forecast_df["Predicted Price"],
-        label="10-Year Forecast",
-        linestyle="dashed"
-    )
+    ax.plot(df["Date"], df["Price"], label="Historical")
+    ax.plot(forecast_df["Date"], forecast_df["Predicted Price"],
+            label="Forecast", linestyle="dashed")
 
-    ax.set_title("Gold Price Forecast (XGBoost - Lag1 Model)")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Price")
     ax.legend()
+    ax.set_title("Gold Price Forecast (XGBoost Lag1)")
 
     st.pyplot(fig)
 
     # ======================
-    # DOWNLOAD BUTTON
+    # DOWNLOAD
     # ======================
     csv = forecast_df.to_csv(index=False).encode("utf-8")
 
     st.download_button(
-        label="📥 Download Forecast CSV",
-        data=csv,
-        file_name="gold_price_forecast_10y.csv",
-        mime="text/csv"
+        "Download Forecast",
+        csv,
+        "forecast.csv",
+        "text/csv"
     )
-
-    st.success("Done! Forecast ready 🎉")
