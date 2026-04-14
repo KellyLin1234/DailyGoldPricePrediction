@@ -9,7 +9,7 @@ import joblib
 # ======================
 st.set_page_config(page_title="Gold Price Forecast", layout="wide")
 
-st.title("💰 Gold Price Prediction App (XGBoost - Lag1 Only)")
+st.title("💰 Gold Price Prediction App")
 st.write("10-Year Forecast using simplified ML model")
 
 # ======================
