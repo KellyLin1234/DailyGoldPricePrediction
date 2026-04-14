@@ -1,21 +1,48 @@
-# Gold Price Prediction Project
+# 📈 Gold Price Prediction Project
+## 🧠 Overview
 
-## Models Used
-- Random Forest
-- Gradient Boosting
-- XGBoost
-- LSTM
-- Hybrid Model
+This project predicts daily gold prices using machine learning and deep learning models. It compares multiple models to find the best performer.
 
-## Results
+---
 
-| Model | MAE | RMSE | R² |
-|------|-----|------|-----|
-| RF | 836 | 1094 | 0.997 |
-| GB | 948 | 1195 | 0.996 |
-| XGB | 597 | 897 | 0.998 |
-| LSTM | 6323 | 8608 | 0.817 |
-| Hybrid | 2026 | 2318 | 0.966 |
+## 📊 Dataset
+* Historical daily gold price data
+* Features include: SPX, SLV, USDX, and Gold Price
 
-## Conclusion
-XGBoost performed the best among all models.
+---
+
+## ⚙️ Models Used
+* Random Forest Regressor
+* XGBoost / Gradient Boosting
+* LSTM Neural Network
+* Simple Hybrid Model (average of models)
+
+---
+
+## 📈 Evaluation Metrics
+* MAE (Mean Absolute Error)
+* RMSE (Root Mean Squared Error)
+* R² Score
+* MAPE (Mean Absolute Percentage Error)
+
+---
+
+## 🚀 Streamlit App Features
+
+* View dataset
+* Visualize gold price trend
+* Compare model predictions
+* Predict gold price in 10 years
+
+---
+
+## ▶️ How to Run
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## 🏁 Conclusion
+
+This project demonstrates basic machine learning and deep learning techniques for time series forecasting of gold prices.
