@@ -19,7 +19,7 @@ st.write("Predict future gold prices using Machine Learning (Random Forest Model
 # ======================
 @st.cache_resource
 def load_model():
-    model = joblib.load("models/random_forest_model.pkl")  # change if needed
+    model = joblib.load("models/random_forest.pkl")
     return model
 
 model = load_model()
