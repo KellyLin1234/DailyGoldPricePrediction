@@ -5,7 +5,11 @@ import joblib
 # ======================
 # LOAD MODEL
 # ======================
-model = joblib.load("models/random_forest.pkl")
+import os
+import joblib
+
+model_path = os.path.join("models", "random_forest.pkl")
+model = joblib.load(model_path)
 
 st.title("Gold Price Prediction App")
 
