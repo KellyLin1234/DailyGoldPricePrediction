@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-from tensorflow.keras.models import load_model
 
 # ======================
 # PAGE CONFIG
@@ -11,7 +10,7 @@ from tensorflow.keras.models import load_model
 st.set_page_config(page_title="Gold Price Prediction", layout="wide")
 
 st.title("📈 Gold Price Prediction App")
-st.write("Compare ML + Deep Learning models and predict gold prices")
+st.write("Best Model: Random Forest Regressor")
 
 # ======================
 # LOAD DATA
@@ -29,27 +28,29 @@ data = load_data()
 # LOAD MODELS
 # ======================
 rf_model = joblib.load("models/random_forest.pkl")
-xgb_model = joblib.load("models/xgboost.pkl")
 
-lstm_model = load_model("models/lstm_model.h5")
+# (optional - keep if you want comparison)
+try:
+    xgb_model = joblib.load("models/xgboost.pkl")
+except:
+    xgb_model = None
 
 # ======================
-# SIDEBAR
+# SIDEBAR MENU
 # ======================
-st.sidebar.header("📌 Navigation")
-option = st.sidebar.radio("Go to:", ["Data", "Charts", "Prediction"])
+menu = st.sidebar.radio("Menu", ["Data", "Visualization", "Prediction"])
 
 # ======================
 # DATA VIEW
 # ======================
-if option == "Data":
-    st.subheader("📊 Dataset Preview")
+if menu == "Data":
+    st.subheader("📊 Dataset")
     st.write(data.tail(20))
 
 # ======================
-# CHARTS
+# VISUALIZATION
 # ======================
-elif option == "Charts":
+elif menu == "Visualization":
     st.subheader("📉 Gold Price Trend")
 
     fig, ax = plt.subplots()
@@ -61,60 +62,48 @@ elif option == "Charts":
 # ======================
 # PREDICTION
 # ======================
-elif option == "Prediction":
-    st.subheader("🔮 Next Day Price Prediction")
+elif menu == "Prediction":
+    st.subheader("🔮 Next Day Gold Price Prediction")
 
-    # ======================
-    # INPUT FEATURES (latest row used)
-    # ======================
+    # Features used in training
     features = ["SPX", "SLV", "USDX"]
 
-    latest_input = data[features].values[-1].reshape(1, -1)
+    latest_data = data[features].values[-1].reshape(1, -1)
 
     # ======================
-    # ML PREDICTIONS
+    # RANDOM FOREST (MAIN MODEL)
     # ======================
-    rf_pred = rf_model.predict(latest_input)[0]
-    xgb_pred = xgb_model.predict(latest_input)[0]
+    rf_pred = rf_model.predict(latest_data)[0]
+
+    st.success(f"🌳 Random Forest Prediction: {rf_pred:.2f}")
 
     # ======================
-    # LSTM (simple fallback)
-    # NOTE: assumes you already prepared correct LSTM input in training
+    # OPTIONAL XGBOOST
     # ======================
-    try:
-        lstm_input = latest_input.reshape((1, latest_input.shape[1], 1))
-        lstm_pred = lstm_model.predict(lstm_input)[0][0]
-    except:
-        lstm_pred = np.nan
+    if xgb_model is not None:
+        xgb_pred = xgb_model.predict(latest_data)[0]
+        st.info(f"⚡ XGBoost Prediction: {xgb_pred:.2f}")
+
+        # Hybrid (optional comparison)
+        hybrid = (rf_pred + xgb_pred) / 2
+        st.warning(f"🔗 Hybrid Prediction: {hybrid:.2f}")
 
     # ======================
-    # HYBRID MODEL
-    # ======================
-    hybrid_pred = (rf_pred + xgb_pred) / 2
-
-    # ======================
-    # DISPLAY RESULTS
-    # ======================
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("Random Forest", f"{rf_pred:.2f}")
-    col2.metric("XGBoost", f"{xgb_pred:.2f}")
-    col3.metric("LSTM", f"{lstm_pred:.2f}" if not np.isnan(lstm_pred) else "N/A")
-    col4.metric("Hybrid", f"{hybrid_pred:.2f}")
-
-    # ======================
-    # CHART COMPARISON
+    # SIMPLE BAR CHART
     # ======================
     st.subheader("📊 Model Comparison")
 
-    fig, ax = plt.subplots()
-    models = ["RF", "XGB", "LSTM", "Hybrid"]
-    values = [
-        rf_pred,
-        xgb_pred,
-        lstm_pred if not np.isnan(lstm_pred) else 0,
-        hybrid_pred
-    ]
+    models = ["Random Forest"]
+    values = [rf_pred]
 
+    if xgb_model is not None:
+        models.append("XGBoost")
+        values.append(xgb_pred)
+
+        models.append("Hybrid")
+        values.append(hybrid)
+
+    fig, ax = plt.subplots()
     ax.bar(models, values)
+    ax.set_ylabel("Price")
     st.pyplot(fig)
