@@ -2,108 +2,67 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import tensorflow as tf
 import matplotlib.pyplot as plt
 
-# ======================
-# PAGE CONFIG
-# ======================
-st.set_page_config(page_title="Gold Price Prediction", layout="wide")
+from utils.preprocessing import clean_data
 
-st.title("📈 Gold Price Prediction App")
-st.write("Best Model: Random Forest Regressor")
+st.title("📊 Gold Price Prediction System")
 
-# ======================
-# LOAD DATA
-# ======================
-@st.cache_data
-def load_data():
-    df = pd.read_csv("data/Gold Price.csv")
-    df['Date'] = pd.to_datetime(df['Date'])
-    df = df.sort_values('Date')
-    return df
+# Load data
+df = pd.read_csv("data/Gold Price.csv")
+df = clean_data(df)
 
-data = load_data()
+st.subheader("Dataset")
+st.write(df.head())
 
-# ======================
-# LOAD MODELS
-# ======================
-rf_model = joblib.load("models/random_forest.pkl")
+# Model selection
+model_choice = st.selectbox(
+    "Choose Model",
+    ["Random Forest", "Gradient Boosting", "XGBoost", "LSTM", "Hybrid"]
+)
 
-# (optional - keep if you want comparison)
-try:
-    xgb_model = joblib.load("models/xgboost.pkl")
-except:
-    xgb_model = None
+# Load models
+rf = joblib.load("models/random_forest.pkl")
+gb = joblib.load("models/gb_model.pkl")
+xgb = joblib.load("models/xgb_model.pkl")
 
-# ======================
-# SIDEBAR MENU
-# ======================
-menu = st.sidebar.radio("Menu", ["Data", "Visualization", "Prediction"])
+lstm = tf.keras.models.load_model("models/lstm_model.h5")
+hybrid_rf = joblib.load("models/hybrid_rf.pkl")
+hybrid_lstm = tf.keras.models.load_model("models/hybrid_lstm.h5")
 
-# ======================
-# DATA VIEW
-# ======================
-if menu == "Data":
-    st.subheader("📊 Dataset")
-    st.write(data.tail(20))
+# Input
+st.subheader("Input Features")
 
-# ======================
-# VISUALIZATION
-# ======================
-elif menu == "Visualization":
-    st.subheader("📉 Gold Price Trend")
+open_p = st.number_input("Open")
+high_p = st.number_input("High")
+low_p = st.number_input("Low")
+volume = st.number_input("Volume")
+chg = st.number_input("Chg%")
 
-    fig, ax = plt.subplots()
-    ax.plot(data["Date"], data["Price"])
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Gold Price")
-    st.pyplot(fig)
+date = st.date_input("Date")
 
-# ======================
-# PREDICTION
-# ======================
-elif menu == "Prediction":
-    st.subheader("🔮 Next Day Gold Price Prediction")
+if st.button("Predict"):
 
-    # Features used in training
-    features = ["SPX", "SLV", "USDX"]
+    date_val = pd.Timestamp(date).toordinal()
 
-    latest_data = data[features].values[-1].reshape(1, -1)
+    features = np.array([[date_val, open_p, high_p, low_p, volume, chg]])
 
-    # ======================
-    # RANDOM FOREST (MAIN MODEL)
-    # ======================
-    rf_pred = rf_model.predict(latest_data)[0]
+    if model_choice == "Random Forest":
+        pred = rf.predict([[open_p]])[0]  # based on your lag model
 
-    st.success(f"🌳 Random Forest Prediction: {rf_pred:.2f}")
+    elif model_choice == "Gradient Boosting":
+        pred = gb.predict(features)[0]
 
-    # ======================
-    # OPTIONAL XGBOOST
-    # ======================
-    if xgb_model is not None:
-        xgb_pred = xgb_model.predict(latest_data)[0]
-        st.info(f"⚡ XGBoost Prediction: {xgb_pred:.2f}")
+    elif model_choice == "XGBoost":
+        pred = xgb.predict(features)[0]
 
-        # Hybrid (optional comparison)
-        hybrid = (rf_pred + xgb_pred) / 2
-        st.warning(f"🔗 Hybrid Prediction: {hybrid:.2f}")
+    elif model_choice == "LSTM":
+        st.warning("LSTM uses sequence input — demo prediction only")
+        pred = "Use full sequence input (handled in backend)"
 
-    # ======================
-    # SIMPLE BAR CHART
-    # ======================
-    st.subheader("📊 Model Comparison")
+    elif model_choice == "Hybrid":
+        st.warning("Hybrid uses LSTM + RF pipeline")
+        pred = "Run full pipeline in backend"
 
-    models = ["Random Forest"]
-    values = [rf_pred]
-
-    if xgb_model is not None:
-        models.append("XGBoost")
-        values.append(xgb_pred)
-
-        models.append("Hybrid")
-        values.append(hybrid)
-
-    fig, ax = plt.subplots()
-    ax.bar(models, values)
-    ax.set_ylabel("Price")
-    st.pyplot(fig)
+    st.success(f"Predicted Price: {pred}")
