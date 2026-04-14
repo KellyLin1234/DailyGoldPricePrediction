@@ -79,49 +79,48 @@ y = df["Price"]
 # ======================
 # PREDICTION
 # ======================
-if st.button("🔮 Predict Future Prices"):
+if st.button("🔮 Predict Next 10 Years"):
 
-    last_value = df["Price"].values[-1]
+    years = 10
+    steps = years * 365
+
     predictions = []
 
-    input_value = np.array([[last_value]])
+    # start with last known price
+    last_price = df["Price"].values[-1]
 
-    for _ in range(future_days):
-        pred = model.predict(input_value)[0]
+    input_data = np.array([[last_price]])
+
+    for _ in range(steps):
+        pred = model.predict(input_data)[0]
         predictions.append(pred)
-        input_value = np.array([[pred]])
 
-    # Future dates
+        # feed prediction back into model (recursive)
+        input_data = np.array([[pred]])
+
+    # future dates
     future_dates = pd.date_range(
         start=df["Date"].iloc[-1],
-        periods=future_days + 1,
+        periods=steps + 1,
         freq="D"
     )[1:]
 
-    # ======================
-    # RESULT TABLE
-    # ======================
-    result_df = pd.DataFrame({
+    forecast_df = pd.DataFrame({
         "Date": future_dates,
         "Predicted Price": predictions
     })
 
-    st.subheader("📉 Future Predictions")
-    st.dataframe(result_df)
+    st.subheader("📊 10-Year Gold Price Forecast")
+    st.dataframe(forecast_df.head(50))  # show first 50 rows only
 
-    # ======================
-    # PLOT RESULT
-    # ======================
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
-    ax2.plot(df["Date"], df["Price"], label="Historical")
-    ax2.plot(result_df["Date"], result_df["Predicted Price"],
-             label="Prediction", linestyle="dashed")
+    # plot
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.plot(df["Date"], df["Price"], label="Historical")
+    ax.plot(forecast_df["Date"], forecast_df["Predicted Price"], label="10-Year Forecast")
 
-    ax2.set_title("Gold Price Forecast")
-    ax2.set_xlabel("Date")
-    ax2.set_ylabel("Price")
-    ax2.legend()
+    ax.set_title("Gold Price 10-Year Prediction (Simulated)")
+    ax.legend()
 
-    st.pyplot(fig2)
+    st.pyplot(fig)
 
-    st.success("Prediction completed successfully!")
+    st.success("10-year forecast generated!")
