@@ -17,7 +17,7 @@ st.set_page_config(
 # TITLE
 # ======================
 st.title("💰 Gold Price Forecast Dashboard")
-st.markdown("### XGBoost Model • 10-Year Prediction • Lag1 Feature")
+st.markdown("### XGBoost Model • 10-Year Prediction")
 
 st.divider()
 
