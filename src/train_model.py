@@ -18,7 +18,6 @@ df = df.sort_values('Date').reset_index(drop=True)
 # ======================
 df['Lag1'] = df['Price'].shift(1)
 df['Lag2'] = df['Price'].shift(2)
-df['Lag3'] = df['Price'].shift(3)
 df['MA7'] = df['Price'].rolling(7).mean()
 
 df = df.dropna()
