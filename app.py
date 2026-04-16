@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 # ======================
 # LOAD MODEL
 # ======================
-model = joblib.load("models/rf_model.pkl")
+model = joblib.load("models/random_forest.pkl")
 scaler = joblib.load("models/scaler.pkl")
 
 # ======================
