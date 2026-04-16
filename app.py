@@ -13,7 +13,7 @@ scaler = joblib.load("models/scaler.pkl")
 # ======================
 # LOAD DATA
 # ======================
-df = pd.read_csv("data/Gold Price.csv")
+df = pd.read_csv("Gold Price.csv")
 df['Date'] = pd.to_datetime(df['Date'])
 df = df.sort_values('Date').reset_index(drop=True)
 
