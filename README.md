@@ -13,7 +13,7 @@ This project predicts daily gold prices using machine learning and deep learning
 
 ## ⚙️ Models Used
 * Random Forest Regressor
-* XGBoost / Gradient Boosting
+* Gradient Boosting
 * LSTM Neural Network
 * Simple Hybrid Model (average of models)
 
