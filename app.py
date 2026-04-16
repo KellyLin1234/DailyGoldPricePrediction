@@ -12,7 +12,7 @@ st.set_page_config(page_title="Gold Price Prediction", layout="wide")
 # ======================
 # LOAD MODEL + SCALER
 # ======================
-model = joblib.load("models/rf_model.pkl")
+model = joblib.load("models/random_forest.pkl")
 scaler = joblib.load("models/scaler.pkl")
 
 # ======================
