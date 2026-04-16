@@ -5,123 +5,122 @@ import joblib
 import matplotlib.pyplot as plt
 
 # ======================
-# PAGE SETUP
+# PAGE CONFIG
 # ======================
-st.set_page_config(page_title="Gold Price Predictor", layout="wide")
+st.set_page_config(page_title="Gold Price Dashboard", layout="wide")
 
-st.title("💰 Gold Price Prediction App (Fixed Version)")
-st.write("Clean forecasting with correct feature alignment + recursive prediction")
-
-# ======================
-# LOAD MODEL + SCALER
-# ======================
-@st.cache_resource
-def load_assets():
-    model = joblib.load("models/model.pkl")
-    scaler = joblib.load("models/scaler.pkl")
-    features = joblib.load("models/feature_columns.pkl")
-    return model, scaler, features
-
-model, scaler, features = load_assets()
+st.title("💰 Gold Price Prediction Dashboard (Stable Forecast)")
 
 # ======================
 # LOAD DATA
 # ======================
-@st.cache_data
-def load_data():
-    df = pd.read_csv("data/Gold Price.csv")  # adjust path if needed
-    df["Date"] = pd.to_datetime(df["Date"])
-    df = df.sort_values("Date")
-    df = df.reset_index(drop=True)
-    return df
-
-df = load_data()
+df = pd.read_csv("Gold Price.csv")
+df['Date'] = pd.to_datetime(df['Date'])
+df = df.sort_values("Date").reset_index(drop=True)
 
 # ======================
-# CREATE LAG FEATURES
+# LOAD MODEL
 # ======================
-def create_features(data):
-    data = data.copy()
-
-    data["lag1"] = data["Close"].shift(1)
-    data["lag2"] = data["Close"].shift(2)
-    data["lag3"] = data["Close"].shift(3)
-
-    data = data.dropna()
-    return data
-
-df_feat = create_features(df)
+model = joblib.load("models/gradient_boosting.pkl")
 
 # ======================
-# SIDEBAR SETTINGS
+# SIDEBAR (OPTION 1 FIX)
 # ======================
 st.sidebar.header("Forecast Settings")
-steps = st.sidebar.slider("Years to Predict", 1, 10, 5)
+
+days = st.sidebar.slider("Forecast Horizon (Days)", 7, 90, 30)
+n_days = days
+
+st.sidebar.success("Model: Gradient Boosting (Stable Short-Term Forecast)")
 
 # ======================
-# PREDICTION INPUT
+# KPI SECTION
 # ======================
-def get_last_input(df_feat):
-    last_row = df_feat[features].iloc[-1].values
-    return last_row
+last_price = df['Price'].iloc[-1]
 
-# ======================
-# RECURSIVE FORECAST
-# ======================
-def forecast(model, scaler, last_input, steps):
-    predictions = []
-    current = last_input.copy()
+col1, col2, col3 = st.columns(3)
 
-    for _ in range(steps):
-        X = current.reshape(1, -1)
-        X_scaled = scaler.transform(X)
-
-        pred = model.predict(X_scaled)[0]
-        predictions.append(pred)
-
-        # shift lag values
-        current = np.roll(current, 1)
-        current[0] = pred  # update lag1 with new prediction
-
-    return predictions
+col1.metric("Current Price", f"{last_price:,.2f}")
+col2.metric("Model", "Gradient Boosting")
+col3.metric("Horizon", f"{days} Days")
 
 # ======================
-# RUN FORECAST
+# HISTORICAL DATA
 # ======================
-last_input = get_last_input(df_feat)
-preds = forecast(model, scaler, last_input, steps)
+st.subheader("📈 Historical Trend")
 
-# create future dates
-last_date = df_feat["Date"].iloc[-1]
-future_dates = pd.date_range(last_date, periods=steps + 1, freq="Y")[1:]
+fig, ax = plt.subplots(figsize=(14, 5))
+ax.plot(df['Date'], df['Price'], linewidth=2)
+ax.set_title("Gold Price History")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
+st.pyplot(fig)
 
 # ======================
-# DISPLAY RESULTS
+# FORECAST ENGINE (STABLE)
 # ======================
-st.subheader("📊 Forecast Results")
+st.subheader("🔮 Forecast")
+
+prices = df['Price'].values.tolist()
+
+lag1 = prices[-1]
+lag2 = prices[-2]
+
+history = prices[-7:].copy()
+predictions = []
+
+for _ in range(n_days):
+
+    ma7 = np.mean(history)
+
+    X = np.array([[lag1, lag2, ma7]])
+
+    pred = model.predict(X)[0]
+    predictions.append(pred)
+
+    lag2 = lag1
+    lag1 = pred
+
+    # keep MA anchored to real data (prevents drift)
+    history = prices[-7:]
+
+# ======================
+# FUTURE DATES
+# ======================
+future_dates = pd.date_range(
+    start=df['Date'].iloc[-1] + pd.Timedelta(days=1),
+    periods=n_days
+)
 
 forecast_df = pd.DataFrame({
     "Date": future_dates,
-    "Predicted Price": preds
+    "Price": predictions
 })
 
-st.dataframe(forecast_df)
-
 # ======================
-# PLOT
+# FORECAST PLOT
 # ======================
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(14, 5))
 
-ax.plot(df_feat["Date"].tail(100), df_feat["Close"].tail(100), label="Historical")
-ax.plot(forecast_df["Date"], forecast_df["Predicted Price"], label="Forecast")
+ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
 
-ax.set_title("Gold Price Forecast")
-ax.legend()
+ax.set_title("Short-Term Gold Price Forecast (Gradient Boosting)")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
 
 st.pyplot(fig)
 
 # ======================
-# METRICS (optional simple check)
+# SUMMARY
 # ======================
-st.subheader("📉 Model Info")
-st.write("Features used:", features)
+st.subheader("📊 Forecast Summary")
+
+start = predictions[0]
+end = predictions[-1]
+
+change_pct = ((end - start) / start) * 100
+
+if change_pct > 0:
+    st.success(f"📈 Expected Increase: +{change_pct:.2f}% over {days} days")
+else:
+    st.warning(f"📉 Expected Decrease: {change_pct:.2f}% over {days} days")
