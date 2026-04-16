@@ -1,80 +1,71 @@
-import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import matplotlib.pyplot as plt
 
-# ======================
-# LOAD MODEL
-# ======================
-model = joblib.load("models/random_forest.pkl")
-scaler = joblib.load("models/scaler.pkl")
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # ======================
 # LOAD DATA
 # ======================
-df = pd.read_csv("Gold Price.csv")
+df = pd.read_csv("data/Gold Price.csv")
 df['Date'] = pd.to_datetime(df['Date'])
 df = df.sort_values('Date').reset_index(drop=True)
 
-st.title("💰 Gold Price Prediction (10-Year Forecast)")
+# ======================
+# FEATURE ENGINEERING
+# ======================
+# 1. Feature Engineering - BE CONSISTENT
+df['Lag1'] = df['Price'].shift(1)
+df['Lag2'] = df['Price'].shift(2)
+df['Lag3'] = df['Price'].shift(3) # Added Lag3 to match your App
+df['MA7'] = df['Price'].rolling(7).mean()
+df = df.dropna()
 
-years = st.slider("Years to Predict", 1, 10, 10)
-n_days = years * 365
+# 2. Split
+features = ['Lag1', 'Lag2', 'Lag3', 'MA7']
+split = int(len(df) * 0.8)
+train, test = df.iloc[:split], df.iloc[split:]
+
+X_train = train[features]
+y_train = train['Price'] # Predicting Price directly makes the App logic simpler
+
+# 3. Model Training
+rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
+rf.fit(X_train, y_train)
+
+# 4. Save both the model and a dummy scaler if you intend to use one
+joblib.dump(rf, "models/random_forest.pkl")
+# Note: If not using scaling for RF, remove scaler.transform from Streamlit
 
 # ======================
-# INITIAL VALUES
+# MODEL
 # ======================
-prices = df['Price'].values.tolist()
-
-predictions = []
-
-# ======================
-# ROLLING FORECAST
-# ======================
-for _ in range(n_days):
-
-    lag1 = prices[-1]
-    lag2 = prices[-2]
-    lag3 = prices[-3]
-    ma7 = np.mean(prices[-7:])
-
-    X = np.array([[lag1, lag2, lag3, ma7]])
-    X_scaled = scaler.transform(X)
-
-    pred = model.predict(X_scaled)[0]
-
-    predictions.append(pred)
-    prices.append(pred)
+model = RandomForestRegressor(n_estimators=200, random_state=42)
+model.fit(X_train_scaled, y_train)
 
 # ======================
-# FUTURE DATES
+# PREDICTION
 # ======================
-future_dates = pd.date_range(
-    start=df['Date'].iloc[-1] + pd.Timedelta(days=1),
-    periods=n_days
-)
-
-pred_df = pd.DataFrame({
-    "Date": future_dates,
-    "Predicted Price": predictions
-})
+y_pred = model.predict(X_test_scaled)
 
 # ======================
-# DISPLAY
+# EVALUATION
 # ======================
-st.subheader("📊 10-Year Forecast")
-st.dataframe(pred_df.head(30))  # show first 30 days only
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print("\n===== MODEL PERFORMANCE =====")
+print(f"MAE:  {mae:.2f}")
+print(f"RMSE: {rmse:.2f}")
+print(f"R2:   {r2:.4f}")
 
 # ======================
-# PLOT (sample view)
+# SAVE
 # ======================
-fig, ax = plt.subplots(figsize=(12, 5))
+joblib.dump(model, "models/rf_model.pkl")
+joblib.dump(scaler, "models/scaler.pkl")
 
-ax.plot(df['Date'], df['Price'], label="History")
-ax.plot(pred_df['Date'], pred_df['Predicted Price'], label="Forecast")
-
-ax.set_title("10-Year Gold Price Prediction")
-ax.legend()
-
-st.pyplot(fig)
+print("\n✅ Model and scaler saved!")
