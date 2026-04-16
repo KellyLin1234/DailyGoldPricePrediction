@@ -17,7 +17,7 @@ st.write("Clean forecasting with correct feature alignment + recursive predictio
 # ======================
 @st.cache_resource
 def load_assets():
-    model = joblib.load("models/model.pkl")
+    model = joblib.load("models/hybrid_rf.pkl")
     scaler = joblib.load("models/scaler.pkl")
     features = joblib.load("models/feature_columns.pkl")
     return model, scaler, features
