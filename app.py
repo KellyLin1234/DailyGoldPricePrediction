@@ -105,9 +105,9 @@ fig, ax = plt.subplots(figsize=(14, 5))
 
 ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
 
-ax.set_title("Gradient Boosting Forecast Path")
+ax.set_title("Gold Forecast")
+ax.set_xlabel("Date")
 ax.set_ylabel("Price")
-
 st.pyplot(fig)
 
 # ======================
