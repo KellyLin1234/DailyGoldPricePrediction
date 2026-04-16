@@ -1,10 +1,14 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib.pyplot as plt
 
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+# ======================
+# LOAD MODEL + SCALER
+# ======================
+model = joblib.load("models/rf_model.pkl")
+scaler = joblib.load("models/scaler.pkl")
 
 # ======================
 # LOAD DATA
@@ -14,60 +18,67 @@ df['Date'] = pd.to_datetime(df['Date'])
 df = df.sort_values('Date').reset_index(drop=True)
 
 # ======================
-# FEATURE ENGINEERING
+# FEATURE (OLD MODEL STYLE: ONLY LAG1)
 # ======================
 df['Lag1'] = df['Price'].shift(1)
-df['Lag2'] = df['Price'].shift(2)
-df['MA7'] = df['Price'].rolling(7).mean()
-
 df = df.dropna()
 
-features = ['Lag1', 'Lag2', 'Lag3', 'MA7']
-X = df[features]
-y = df['Price']
+st.title("💰 Gold Price Prediction App (Legacy Model)")
+
+n_days = st.slider("Days to Predict", 1, 30, 7)
 
 # ======================
-# TRAIN TEST SPLIT (NO LEAKAGE)
+# START FROM LAST KNOWN VALUE
 # ======================
-split = int(len(df) * 0.8)
+lag1 = df['Price'].iloc[-1]
 
-X_train, X_test = X[:split], X[split:]
-y_train, y_test = y[:split], y[split:]
+predictions = []
 
-# ======================
-# SCALING (ONLY X)
-# ======================
-scaler = MinMaxScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+for _ in range(n_days):
 
-# ======================
-# MODEL
-# ======================
-model = RandomForestRegressor(n_estimators=200, random_state=42)
-model.fit(X_train_scaled, y_train)
+    # ONLY 1 FEATURE (IMPORTANT)
+    X = np.array([[lag1]])
 
-# ======================
-# PREDICTION
-# ======================
-y_pred = model.predict(X_test_scaled)
+    # scale
+    X_scaled = scaler.transform(X)
+
+    # predict
+    pred = model.predict(X_scaled)[0]
+    predictions.append(pred)
+
+    # update lag
+    lag1 = pred
 
 # ======================
-# EVALUATION
+# FUTURE DATES
 # ======================
-mae = mean_absolute_error(y_test, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-r2 = r2_score(y_test, y_pred)
+future_dates = pd.date_range(
+    start=df['Date'].iloc[-1] + pd.Timedelta(days=1),
+    periods=n_days
+)
 
-print("\n===== MODEL PERFORMANCE =====")
-print(f"MAE:  {mae:.2f}")
-print(f"RMSE: {rmse:.2f}")
-print(f"R2:   {r2:.4f}")
+pred_df = pd.DataFrame({
+    "Date": future_dates,
+    "Predicted Price": predictions
+})
 
 # ======================
-# SAVE
+# OUTPUT
 # ======================
-joblib.dump(model, "models/rf_model.pkl")
-joblib.dump(scaler, "models/scaler.pkl")
+st.subheader("📊 Predictions")
+st.dataframe(pred_df)
 
-print("\n✅ Model and scaler saved!")
+# ======================
+# PLOT
+# ======================
+fig, ax = plt.subplots(figsize=(10, 5))
+
+ax.plot(df['Date'], df['Price'], label="Historical")
+ax.plot(pred_df['Date'], pred_df['Predicted Price'], label="Forecast", linestyle='dashed')
+
+ax.set_title("Gold Price Forecast (Legacy Model)")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
+ax.legend()
+
+st.pyplot(fig)
