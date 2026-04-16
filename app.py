@@ -13,7 +13,7 @@ st.title("💰 Gold Price Prediction (10-Year Forecast)")
 # ======================
 # LOAD MODEL
 # ======================
-model = joblib.load("models/xgboost.pkl")
+model = joblib.load("models/gradient_boosting.pkl")
 
 # ======================
 # LOAD DATA
