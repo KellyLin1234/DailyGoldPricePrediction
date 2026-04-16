@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 # PAGE CONFIG
 # ======================
 st.set_page_config(page_title="Gold Intelligence Dashboard", layout="wide")
+
 st.title("💰 Gold Price Prediction Dashboard")
 
 # ======================
@@ -23,14 +24,14 @@ df = df.sort_values("Date").reset_index(drop=True)
 model = joblib.load("models/gradient_boosting.pkl")
 
 # ======================
-# SIDEBAR
+# SIDEBAR CONTROLS
 # ======================
 st.sidebar.header("Forecast Settings")
 
 years = st.sidebar.slider("Forecast Horizon (Years)", 1, 10, 5)
 n_days = years * 365
 
-st.sidebar.success("Active Model: Gradient Boosting (Best Model)")
+st.sidebar.success("Active Model: Gradient Boosting")
 
 # ======================
 # KPI SECTION
@@ -39,42 +40,42 @@ last_price = df['Price'].iloc[-1]
 
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Current Price", f"{last_price:,.2f}")
+col1.metric("Current Gold Price", f"{last_price:,.2f}")
 col2.metric("Model", "Gradient Boosting")
-col3.metric("Horizon", f"{years} Years")
+col3.metric("Forecast Horizon", f"{years} Years")
 
 # ======================
-# HISTORICAL PLOT
+# HISTORICAL DATA PLOT
 # ======================
-st.subheader("📈 Historical Trend")
+st.subheader("📈 Historical Gold Price")
 
 fig, ax = plt.subplots(figsize=(14, 5))
 ax.plot(df['Date'], df['Price'], linewidth=2)
 ax.set_title("Gold Price History")
+ax.set_xlabel("Date")
 ax.set_ylabel("Price")
 st.pyplot(fig)
 
 # ======================
-# FORECAST (NO DRIFT VERSION)
+# FORECAST ENGINE (CLEAN + STABLE)
 # ======================
-
 st.subheader("🔮 Forecast")
 
 prices = df['Price'].values.tolist()
 
 lag1 = prices[-1]
 lag2 = prices[-2]
-history = prices[-7:].copy()
 
+history = prices[-7:].copy()
 predictions = []
 
-alpha = 0.85  # stability factor
+alpha = 0.85  # stability factor (prevents drift)
 
 for _ in range(n_days):
 
     ma7 = np.mean(history)
 
-    # stabilized lags (prevents explosion)
+    # stabilized lags (prevents runaway recursion)
     lag1_stable = alpha * lag1 + (1 - alpha) * prices[-1]
     lag2_stable = alpha * lag2 + (1 - alpha) * prices[-2]
 
@@ -83,11 +84,11 @@ for _ in range(n_days):
     pred = model.predict(X)[0]
     predictions.append(pred)
 
-    # update lags
+    # update lag structure
     lag2 = lag1
     lag1 = pred
 
-    # IMPORTANT: keep MA window stable (prevents drift)
+    # IMPORTANT: keep MA anchored to real data
     history = prices[-7:]
 
 # ======================
@@ -109,7 +110,9 @@ forecast_df = pd.DataFrame({
 fig, ax = plt.subplots(figsize=(14, 5))
 
 ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
-ax.set_title("Forecast (Gradient Boosting - Stable)")
+
+ax.set_title("Gold Price Forecast (Gradient Boosting)")
+ax.set_xlabel("Date")
 ax.set_ylabel("Price")
 
 st.pyplot(fig)
@@ -117,14 +120,14 @@ st.pyplot(fig)
 # ======================
 # SUMMARY
 # ======================
-st.subheader("📊 Summary")
+st.subheader("📊 Forecast Summary")
 
-start = predictions[0]
-end = predictions[-1]
+start_price = predictions[0]
+end_price = predictions[-1]
 
-change_pct = ((end - start) / start) * 100
+change_pct = ((end_price - start_price) / start_price) * 100
 
 if change_pct > 0:
-    st.success(f"📈 Predicted Growth: +{change_pct:.2f}% over {years} years")
+    st.success(f"📈 Expected Growth: +{change_pct:.2f}% over {years} years")
 else:
-    st.warning(f"📉 Predicted Drop: {change_pct:.2f}% over {years} years")
+    st.warning(f"📉 Expected Decline: {change_pct:.2f}% over {years} years")
