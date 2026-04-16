@@ -1,143 +1,111 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import joblib
+import matplotlib.pyplot as plt
 
 # ======================
-# PAGE CONFIG
+# PAGE SETUP
 # ======================
-st.set_page_config(page_title="Gold Price ML Dashboard", layout="wide")
-
-st.title("📊 Gold Price Prediction Project Dashboard")
-st.markdown("A full overview of models, evaluation metrics, and forecasting system.")
+st.set_page_config(page_title="Gold Price Predictor", layout="wide")
+st.title("💰 Gold Price Prediction (10-Year Forecast)")
 
 # ======================
-# SIDEBAR INFO
+# LOAD MODEL
 # ======================
-st.sidebar.title("📁 Project Info")
-st.sidebar.write("GitHub: https://github.com/KellyLin1234/DailyGoldPricePrediction")
-
-st.sidebar.markdown("""
-### Models Used:
-- Random Forest
-- Gradient Boosting / XGBoost
-- LSTM (deep learning)
-- Hybrid (RF + LSTM)
-""")
+model = joblib.load("models/xgboost.pkl")
 
 # ======================
-# LOAD METRICS (you should create this file)
+# LOAD DATA
 # ======================
-try:
-    metrics = pd.read_csv("models/model_metrics.csv")
-except:
-    metrics = pd.DataFrame({
-        "Model": ["Random Forest", "XGBoost", "LSTM", "Hybrid"],
-        "MAE": [21570, 18000, 19000, 16000],
-        "RMSE": [29627, 25000, 27000, 22000],
-        "R2": [0.72, 0.78, 0.75, 0.82]
-    })
-
-# ======================
-# METRICS SECTION
-# ======================
-st.header("📈 Model Performance Comparison")
-
-st.dataframe(metrics)
-
-# Bar chart (R2 comparison)
-fig, ax = plt.subplots()
-ax.bar(metrics["Model"], metrics["R2"])
-ax.set_title("R² Score Comparison")
-ax.set_ylabel("R² Score")
-st.pyplot(fig)
-
-# ======================
-# MODEL EXPLANATION
-# ======================
-st.header("🤖 Models Overview")
-
-st.markdown("""
-### 🌲 Random Forest
-- Good at short-term patterns
-- Works well with lag features (Lag1, Lag2, MA7)
-- Weak for long-term forecasting
-
-### ⚡ XGBoost / Gradient Boosting
-- More accurate than RF
-- Handles non-linearity better
-- Still not perfect for long sequences
-
-### 🧠 LSTM
-- Designed for time-series
-- Learns sequential patterns
-- Better long-term behavior than RF
-
-### 🔗 Hybrid Model
-- Combines ML + Deep Learning
-- Usually best performance
-""")
-
-# ======================
-# DATA INFO
-# ======================
-st.header("📊 Dataset Overview")
-
-st.markdown("""
-- Source: Historical Gold Price dataset
-- Features:
-  - Date
-  - Price
-  - Lag features
-  - Moving averages (MA7)
-""")
-
 df = pd.read_csv("Gold Price.csv")
 df['Date'] = pd.to_datetime(df['Date'])
-
-st.write(df.head())
+df = df.sort_values('Date').reset_index(drop=True)
 
 # ======================
-# FORECAST PREVIEW (OPTIONAL)
+# USER INPUT
 # ======================
-st.header("📉 Quick Forecast Preview")
+years = st.slider("Years to Predict", 1, 10, 10)
+n_days = years * 365
 
-model = joblib.load("models/random_forest.pkl")
-
-n_days = 30
+# ======================
+# INITIAL VALUES (REAL DATA ONLY)
+# ======================
 last_prices = df['Price'].values.tolist()
 
 lag1 = last_prices[-1]
 lag2 = last_prices[-2]
-history = last_prices[-7:].copy()
 
-preds = []
+# IMPORTANT: keep MA7 grounded in REAL history only
+price_history = last_prices[-7:].copy()
 
-for _ in range(n_days):
-    ma7 = np.mean(history)
+predictions = []
+
+# ======================
+# MULTI-STEP FORECAST (STABLE VERSION)
+# ======================
+for i in range(n_days):
+
+    # MA7 stays anchored (prevents drift explosion)
+    ma7 = np.mean(price_history)
+
     X = np.array([[lag1, lag2, ma7]])
 
-    pred = model.predict(X)[0]
-    preds.append(pred)
+    pred_price = model.predict(X)[0]
 
+    # 🔥 safety clamp (prevents unrealistic explosion over long horizon)
+    min_bound = min(last_prices) * 0.7
+    max_bound = max(last_prices) * 1.3
+    pred_price = np.clip(pred_price, min_bound, max_bound)
+
+    predictions.append(pred_price)
+
+    # update lags
     lag2 = lag1
-    lag1 = pred
+    lag1 = pred_price
 
-    history.append(pred)
-    history.pop(0)
+    # update rolling window BUT controlled
+    price_history.append(pred_price)
+    price_history.pop(0)
 
-future_dates = pd.date_range(df['Date'].iloc[-1], periods=n_days)
+# ======================
+# FUTURE DATES
+# ======================
+future_dates = pd.date_range(
+    start=df['Date'].iloc[-1] + pd.Timedelta(days=1),
+    periods=n_days
+)
 
-fig, ax = plt.subplots()
-ax.plot(future_dates, preds, label="Forecast (30 days)")
-ax.set_title("Short-Term Forecast Preview")
+pred_df = pd.DataFrame({
+    "Date": future_dates,
+    "Predicted Price": predictions
+})
+
+# ======================
+# DISPLAY
+# ======================
+st.subheader("📊 Forecast (Preview)")
+st.dataframe(pred_df.head(30))
+
+st.subheader("📈 Full Trend")
+
+fig, ax = plt.subplots(figsize=(14, 6))
+
+ax.plot(df['Date'], df['Price'], label="Historical Price")
+ax.plot(pred_df['Date'], pred_df['Predicted Price'], label="10-Year Forecast")
+
+ax.set_title("Gold Price Forecast (Stable Multi-Step)")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
 ax.legend()
 
 st.pyplot(fig)
 
 # ======================
-# FOOTER
+# SUMMARY
 # ======================
-st.markdown("---")
-st.markdown("🚀 Built for Machine Learning Project Demonstration")
+st.subheader("📌 Summary")
+
+st.write("Last Actual Price:", df['Price'].iloc[-1])
+st.write("Predicted Price (End of Forecast):", predictions[-1])
+st.write("Total Change:", predictions[-1] - df['Price'].iloc[-1])
