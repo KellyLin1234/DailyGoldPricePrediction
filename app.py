@@ -17,7 +17,7 @@ df = pd.read_csv("Gold Price.csv")
 df['Date'] = pd.to_datetime(df['Date'])
 df = df.sort_values("Date").reset_index(drop=True)
 
-# Safe fallback for LSTM feature
+# Ensure LSTM_Pred exists (safe fallback if not included)
 if 'LSTM_Pred' not in df.columns:
     df['LSTM_Pred'] = 0
 
@@ -41,7 +41,7 @@ last_price = df['Price'].iloc[-1]
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Current Gold Price", f"{last_price:,.2f}")
-col2.metric("Model", "Hybrid RF (Stable Version)")
+col2.metric("Model", "Hybrid RF + LSTM Feature")
 col3.metric("Forecast Horizon", f"{years} Years")
 
 # ======================
@@ -57,51 +57,38 @@ ax.set_ylabel("Price")
 st.pyplot(fig)
 
 # ======================
-# FORECAST ENGINE (FIXED + REALISTIC)
+# FORECAST ENGINE
 # ======================
-st.subheader("🔮 Forecast (Stable & Realistic)")
+st.subheader("🔮 Forecast")
 
 prices = df['Price'].tolist()
-lstm_series = df['LSTM_Pred'].tolist()
-
 predictions = []
 
 lag1 = prices[-1]
 lag2 = prices[-2]
+history = prices[-7:].copy()
 
-# REAL anchor history (prevents drift)
-real_history = prices[-30:].copy()
+for _ in range(n_days):
 
-for i in range(n_days):
+    # moving average feature
+    ma7 = np.mean(history)
 
-    # ======================
-    # Stable MA7 (real-anchored)
-    # ======================
-    ma7 = np.mean(real_history[-7:])
+    # use last known LSTM feature (NO TensorFlow needed)
+    lstm_pred = df['LSTM_Pred'].iloc[-1]
 
-    # ======================
-    # Stable LSTM feature (smoothed)
-    # ======================
-    lstm_pred = np.mean(lstm_series[-30:])
-
-    # ======================
-    # MODEL INPUT (must match training)
-    # ======================
+    # model input must match training
     X = np.array([[lag1, lag2, ma7, lstm_pred]])
-    pred = model.predict(X)[0]
 
+    pred = model.predict(X)[0]
     predictions.append(pred)
 
-    # ======================
-    # LIMITED RECURSIVE UPDATE (FIX DRIFT)
-    # ======================
+    # update lags
     lag2 = lag1
     lag1 = pred
 
-    # only slowly update history (not full recursion)
-    if i % 7 == 0:
-        real_history.append(pred)
-        real_history = real_history[-30:]
+    # update rolling history
+    history.append(pred)
+    history = history[-7:]
 
 # ======================
 # FUTURE DATES
@@ -121,7 +108,7 @@ forecast_df = pd.DataFrame({
 # ======================
 fig, ax = plt.subplots(figsize=(14, 5))
 ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
-ax.set_title("Gold Price Forecast (Hybrid Model - Fixed)")
+ax.set_title("Gold Price Forecast (Hybrid Model)")
 ax.set_xlabel("Date")
 ax.set_ylabel("Price")
 st.pyplot(fig)
