@@ -3,13 +3,13 @@ import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
+from tensorflow.keras.models import load_model
 
 # ======================
 # PAGE CONFIG
 # ======================
 st.set_page_config(page_title="Gold Intelligence Dashboard", layout="wide")
-
-st.title("💰 Gold Price Prediction Dashboard")
+st.title("💰 Gold Price Prediction Dashboard (Hybrid Model)")
 
 # ======================
 # LOAD DATA
@@ -19,33 +19,34 @@ df['Date'] = pd.to_datetime(df['Date'])
 df = df.sort_values("Date").reset_index(drop=True)
 
 # ======================
-# LOAD MODEL (BEST MODEL)
+# LOAD MODELS
 # ======================
-model = joblib.load("models/hybrid_rf.pkl")
+hybrid_model = joblib.load("models/hybrid_rf.pkl")
+lstm_model = load_model("models/lstm_model.h5")
+
+# If you used scaler during training (VERY IMPORTANT)
+scaler = joblib.load("models/scaler.pkl")
 
 # ======================
-# SIDEBAR CONTROLS
+# SIDEBAR
 # ======================
 st.sidebar.header("Forecast Settings")
 
 years = st.sidebar.slider("Forecast Horizon (Years)", 1, 10, 5)
 n_days = years * 365
 
-st.sidebar.success("Active Model: Gradient Boosting")
-
 # ======================
-# KPI SECTION
+# KPI
 # ======================
 last_price = df['Price'].iloc[-1]
 
 col1, col2, col3 = st.columns(3)
-
 col1.metric("Current Gold Price", f"{last_price:,.2f}")
-col2.metric("Model", "Gradient Boosting")
+col2.metric("Model", "Hybrid RF + LSTM")
 col3.metric("Forecast Horizon", f"{years} Years")
 
 # ======================
-# HISTORICAL DATA PLOT
+# HISTORICAL PLOT
 # ======================
 st.subheader("📈 Historical Gold Price")
 
@@ -57,39 +58,51 @@ ax.set_ylabel("Price")
 st.pyplot(fig)
 
 # ======================
-# FORECAST ENGINE (CLEAN + STABLE)
+# FEATURE PREP
+# ======================
+prices = df['Price'].values.tolist()
+
+def create_lstm_input(prices, window=60):
+    arr = np.array(prices[-window:])
+    return arr.reshape(1, window, 1)
+
+# ======================
+# FORECAST ENGINE
 # ======================
 st.subheader("🔮 Forecast")
 
-prices = df['Price'].values.tolist()
+predictions = []
 
 lag1 = prices[-1]
 lag2 = prices[-2]
 
 history = prices[-7:].copy()
-predictions = []
-
-alpha = 0.85  # stability factor (prevents drift)
 
 for _ in range(n_days):
 
     ma7 = np.mean(history)
 
-    # stabilized lags (prevents runaway recursion)
-    lag1_stable = alpha * lag1 + (1 - alpha) * prices[-1]
-    lag2_stable = alpha * lag2 + (1 - alpha) * prices[-2]
+    # ===== LSTM FEATURE =====
+    lstm_input = create_lstm_input(prices)
+    lstm_pred = lstm_model.predict(lstm_input, verbose=0)[0][0]
 
-    X = np.array([[lag1_stable, lag2_stable, ma7]])
+    # inverse transform if needed
+    lstm_pred = scaler.inverse_transform([[lstm_pred]])[0][0]
 
-    pred = model.predict(X)[0]
+    # ===== HYBRID INPUT =====
+    X = np.array([[lag1, lag2, ma7, lstm_pred]])
+
+    pred = hybrid_model.predict(X)[0]
     predictions.append(pred)
 
-    # update lag structure
+    # update lags
     lag2 = lag1
     lag1 = pred
 
-    # IMPORTANT: keep MA anchored to real data
-    history = prices[-7:]
+    # update history
+    history.append(pred)
+    history = history[-7:]
+    prices.append(pred)
 
 # ======================
 # FUTURE DATES
@@ -105,16 +118,13 @@ forecast_df = pd.DataFrame({
 })
 
 # ======================
-# FORECAST PLOT
+# PLOT FORECAST
 # ======================
 fig, ax = plt.subplots(figsize=(14, 5))
-
 ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
-
-ax.set_title("Gold Price Forecast (Gradient Boosting)")
+ax.set_title("Hybrid Model Forecast")
 ax.set_xlabel("Date")
 ax.set_ylabel("Price")
-
 st.pyplot(fig)
 
 # ======================
