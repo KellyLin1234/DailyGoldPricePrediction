@@ -8,8 +8,7 @@ import matplotlib.pyplot as plt
 # PAGE SETUP
 # ======================
 st.set_page_config(page_title="Gold Price Predictor", layout="wide")
-
-st.title("💰 Gold Price Prediction (Multi-Step Forecast)")
+st.title("💰 Gold Price Prediction (Stable Multi-Step Forecast)")
 
 # ======================
 # LOAD MODEL
@@ -30,38 +29,30 @@ years = st.slider("Years to Predict", 1, 10, 10)
 n_days = years * 365
 
 # ======================
-# MULTI-STEP FORECAST
+# INITIAL HISTORY (REAL DATA ONLY)
 # ======================
+history = df['Price'].values.tolist()
 
 predictions = []
 
-last_prices = df['Price'].values.tolist()
-
-lag1 = last_prices[-1]
-lag2 = last_prices[-2]
-
-price_history = last_prices[-7:].copy()
-
+# ======================
+# STABLE FORECAST LOOP
+# ======================
 for _ in range(n_days):
 
-    # MA7 feature
-    ma7 = np.mean(price_history)
+    # Always compute features from REAL recent window (NOT growing predictions)
+    lag1 = history[-1]
+    lag2 = history[-2]
+    ma7 = np.mean(history[-7:])
 
-    # Feature vector (MUST match training)
     X = np.array([[lag1, lag2, ma7]])
 
-    # Predict next price
     pred_price = model.predict(X)[0]
 
     predictions.append(pred_price)
 
-    # Update lag values
-    lag2 = lag1
-    lag1 = pred_price
-
-    # Update rolling window
-    price_history.append(pred_price)
-    price_history.pop(0)
+    # Update history for rolling features
+    history.append(pred_price)
 
 # ======================
 # FUTURE DATES
@@ -79,7 +70,7 @@ pred_df = pd.DataFrame({
 # ======================
 # DISPLAY TABLE
 # ======================
-st.subheader("📊 Forecast Data")
+st.subheader("📊 Forecast (First 30 Days)")
 st.dataframe(pred_df.head(30))
 
 # ======================
@@ -98,10 +89,10 @@ ax.legend()
 st.pyplot(fig)
 
 # ======================
-# SUMMARY METRICS
+# SUMMARY
 # ======================
-st.subheader("📈 Forecast Summary")
+st.subheader("📈 Summary")
 
 st.write("Last Actual Price:", df['Price'].iloc[-1])
-st.write("Predicted End Price:", predictions[-1])
+st.write("Final Forecast Price:", predictions[-1])
 st.write("Total Change:", predictions[-1] - df['Price'].iloc[-1])
