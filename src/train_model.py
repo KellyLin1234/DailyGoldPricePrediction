@@ -1,71 +1,108 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+from datetime import timedelta
 
 # ======================
-# LOAD DATA
+# 1. PAGE SETUP & LOADING
 # ======================
-df = pd.read_csv("data/Gold Price.csv")
-df['Date'] = pd.to_datetime(df['Date'])
-df = df.sort_values('Date').reset_index(drop=True)
+st.set_page_config(page_title="Gold Price Predictor", layout="wide")
+
+@st.cache_resource
+def load_assets():
+    # Loading the Random Forest model
+    # Note: Ensure "models/random_forest.pkl" exists!
+    model = joblib.load("models/random_forest.pkl")
+    return model
+
+try:
+    rf_model = load_assets()
+except:
+    st.error("Model file not found. Please run your training script first.")
+    st.stop()
 
 # ======================
-# FEATURE ENGINEERING
+# 2. DATA PREPARATION
 # ======================
-# 1. Feature Engineering - BE CONSISTENT
-df['Lag1'] = df['Price'].shift(1)
-df['Lag2'] = df['Price'].shift(2)
-df['Lag3'] = df['Price'].shift(3) # Added Lag3 to match your App
-df['MA7'] = df['Price'].rolling(7).mean()
-df = df.dropna()
+st.title("💰 Gold Price Forecasting")
+st.markdown("This app uses a **Random Forest Regressor** to predict gold price trends.")
 
-# 2. Split
-features = ['Lag1', 'Lag2', 'Lag3', 'MA7']
-split = int(len(df) * 0.8)
-train, test = df.iloc[:split], df.iloc[split:]
+# Load the dataset to get the most recent values
+@st.cache_data
+def get_data():
+    df = pd.read_csv('Gold Price.csv')
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.sort_values('Date')
+    return df
 
-X_train = train[features]
-y_train = train['Price'] # Predicting Price directly makes the App logic simpler
+df = get_data()
 
-# 3. Model Training
-rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
-rf.fit(X_train, y_train)
-
-# 4. Save both the model and a dummy scaler if you intend to use one
-joblib.dump(rf, "models/random_forest.pkl")
-# Note: If not using scaling for RF, remove scaler.transform from Streamlit
+# Sidebar inputs
+st.sidebar.header("Forecast Settings")
+n_days = st.sidebar.slider("Days to Predict", 1, 30, 7)
 
 # ======================
-# MODEL
+# 3. MULTI-STEP FORECAST LOGIC
 # ======================
-model = RandomForestRegressor(n_estimators=200, random_state=42)
-model.fit(X_train_scaled, y_train)
+# We need Lag1, Lag2, and MA7 to match your training:
+# X_train = train[['Lag1', 'Lag2', 'MA7']]
+
+# Get the most recent data points
+last_prices = df['Price'].tolist()
+
+predictions = []
+current_history = last_prices.copy()
+
+for i in range(n_days):
+    # Prepare features for the current step
+    lag1 = current_history[-1]
+    lag2 = current_history[-2]
+    ma7  = np.mean(current_history[-7:])
+    
+    # Create feature array (Matching the 3 features from training)
+    features = np.array([[lag1, lag2, ma7]])
+    
+    # Predict the DIFFERENCE (as your training used y_train = train['Price_Diff'])
+    pred_diff = rf_model.predict(features)[0]
+    
+    # Calculate actual price: Price = Last_Price + Predicted_Diff
+    next_price = lag1 + pred_diff
+    
+    predictions.append(next_price)
+    current_history.append(next_price)
 
 # ======================
-# PREDICTION
+# 4. VISUALIZATION
 # ======================
-y_pred = model.predict(X_test_scaled)
+future_dates = [df['Date'].iloc[-1] + timedelta(days=x) for x in range(1, n_days + 1)]
+pred_df = pd.DataFrame({'Date': future_dates, 'Predicted Price': predictions})
+
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    st.subheader("Forecasted Prices")
+    st.dataframe(pred_df.style.format({"Predicted Price": "{:.2f}"}))
+
+with col2:
+    st.subheader("Price Chart")
+    fig, ax = plt.subplots(figsize=(10, 5))
+    
+    # Show last 30 days of history + forecast
+    recent_hist = df.tail(30)
+    ax.plot(recent_hist['Date'], recent_hist['Price'], label="Actual Price", color="blue")
+    ax.plot(pred_df['Date'], pred_df['Predicted Price'], label="Forecast", color="orange", linestyle="--")
+    
+    plt.xticks(rotation=45)
+    ax.legend()
+    st.pyplot(fig)
 
 # ======================
-# EVALUATION
+# 5. METRICS
 # ======================
-mae = mean_absolute_error(y_test, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-r2 = r2_score(y_test, y_pred)
-
-print("\n===== MODEL PERFORMANCE =====")
-print(f"MAE:  {mae:.2f}")
-print(f"RMSE: {rmse:.2f}")
-print(f"R2:   {r2:.4f}")
-
-# ======================
-# SAVE
-# ======================
-joblib.dump(model, "models/rf_model.pkl")
-joblib.dump(scaler, "models/scaler.pkl")
-
-print("\n✅ Model and scaler saved!")
+st.divider()
+m1, m2, m3 = st.columns(3)
+m1.metric("Last Closing Price", f"${last_prices[-1]:,.2f}")
+m2.metric("Next Day Forecast", f"${predictions[0]:,.2f}", f"{predictions[0]-last_prices[-1]:+.2f}")
+m3.metric("Avg Forecasted Price", f"${np.mean(predictions):,.2f}")
