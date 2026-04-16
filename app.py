@@ -56,41 +56,47 @@ ax.set_title("Gold Price Trend")
 ax.set_ylabel("Price")
 
 st.pyplot(fig)
-
 # ======================
-# MULTI-STEP FORECAST (GB MODEL)
+# NO-DRIFT FORECASTING (STABLE VERSION)
 # ======================
-st.subheader("🔮 Forecast (Gradient Boosting)")
-
-last_prices = df['Price'].values.tolist()
-
-lag1 = last_prices[-1]
-lag2 = last_prices[-2]
-history = last_prices[-7:].copy()
 
 predictions = []
 
+real_prices = df['Price'].values.tolist()
+
+lag1 = real_prices[-1]
+lag2 = real_prices[-2]
+
+# 🔥 IMPORTANT: MA window NEVER gets polluted
+base_history = real_prices[-7:].copy()
+
+# trend damping factor (stability control)
+alpha = 0.85
+
+last_pred = lag1
+
 for _ in range(n_days):
 
-    ma7 = np.mean(history)
+    # keep MA7 anchored to REAL data + mild trend smoothing
+    ma7_real = np.mean(base_history)
 
-    X = np.array([[lag1, lag2, ma7]])
+    # blended lag instead of full recursive explosion
+    lag1_stable = alpha * lag1 + (1 - alpha) * last_pred
+    lag2_stable = alpha * lag2 + (1 - alpha) * lag1
+
+    X = np.array([[lag1_stable, lag2_stable, ma7_real]])
 
     pred = model.predict(X)[0]
+
     predictions.append(pred)
 
+    # update controlled recursion (NOT full replacement)
+    last_pred = pred
     lag2 = lag1
     lag1 = pred
 
-    history.append(pred)
-    history.pop(0)
-
-future_dates = pd.date_range(df['Date'].iloc[-1], periods=n_days)
-
-forecast_df = pd.DataFrame({
-    "Date": future_dates,
-    "Price": predictions
-})
+    # IMPORTANT: do NOT grow MA window with predictions
+    # base_history stays fixed (prevents drift)
 
 # ======================
 # FORECAST CHART
