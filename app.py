@@ -5,6 +5,11 @@ import joblib
 import matplotlib.pyplot as plt
 
 # ======================
+# PAGE CONFIG
+# ======================
+st.set_page_config(page_title="Gold Price Prediction", layout="wide")
+
+# ======================
 # LOAD MODEL + SCALER
 # ======================
 model = joblib.load("models/rf_model.pkl")
@@ -28,74 +33,86 @@ df['MA7'] = df['Price'].rolling(7).mean()
 df = df.dropna()
 
 # ======================
-# STREAMLIT UI
+# UI
 # ======================
 st.title("💰 Gold Price Prediction App")
-st.write("Predict future gold prices using Random Forest")
+st.markdown("Predict future gold prices using Machine Learning (Random Forest)")
 
-n_days = st.slider("Days to Predict", 1, 30, 7)
+n_days = st.slider("Select number of days to predict", 1, 30, 7)
 
 # ======================
-# PREPARE LAST DATA POINT
+# GET LAST DATA
 # ======================
-last_data = df.iloc[-1:].copy()
+last_row = df.iloc[-1]
+
+lag1 = last_row['Price']
+lag2 = df.iloc[-2]['Price']
+lag3 = df.iloc[-3]['Price']
+
+price_history = list(df['Price'].values[-7:])
 
 # ======================
 # MULTI-STEP FORECAST
 # ======================
 predictions = []
 
-current_input = last_data[['Lag1', 'Lag2', 'Lag3', 'MA7']].values.flatten()
-
-price_history = list(df['Price'].values[-7:])  # for MA7 updates
-
 for _ in range(n_days):
-    # reshape input
-    X = np.array(current_input).reshape(1, -1)
 
-    # predict
-    pred = model.predict(X)[0]
+    ma7 = np.mean(price_history)
+
+    X = np.array([[lag1, lag2, lag3, ma7]])
+    X_scaled = scaler.transform(X)
+
+    pred = model.predict(X_scaled)[0]
     predictions.append(pred)
 
-    # update history
+    # update lags
+    lag3 = lag2
+    lag2 = lag1
+    lag1 = pred
+
+    # update MA7
     price_history.append(pred)
     price_history.pop(0)
 
-    # update features
-    lag1 = pred
-    lag2 = current_input[0]
-    lag3 = current_input[1]
-    ma7 = np.mean(price_history)
-
-    current_input = [lag1, lag2, lag3, ma7]
-
 # ======================
-# DISPLAY RESULTS
+# CREATE RESULT DF
 # ======================
-future_dates = pd.date_range(df['Date'].iloc[-1] + pd.Timedelta(days=1), periods=n_days)
+future_dates = pd.date_range(
+    start=df['Date'].iloc[-1] + pd.Timedelta(days=1),
+    periods=n_days
+)
 
 pred_df = pd.DataFrame({
     "Date": future_dates,
     "Predicted Price": predictions
 })
 
-st.subheader("📈 Predictions")
-st.dataframe(pred_df)
+# ======================
+# DISPLAY
+# ======================
+st.subheader("📊 Prediction Results")
+st.dataframe(pred_df, use_container_width=True)
 
 # ======================
 # PLOT
 # ======================
-plt.figure(figsize=(10, 5))
+fig, ax = plt.subplots(figsize=(10, 5))
 
-# historical
-plt.plot(df['Date'], df['Price'], label="Historical Price")
+ax.plot(df['Date'], df['Price'], label="Historical Price")
+ax.plot(pred_df['Date'], pred_df['Predicted Price'],
+        label="Predicted Price", linestyle='dashed')
 
-# forecast
-plt.plot(pred_df['Date'], pred_df['Predicted Price'], label="Predicted Price", linestyle='dashed')
+ax.set_title("Gold Price Forecast")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
+ax.legend()
 
-plt.legend()
-plt.xlabel("Date")
-plt.ylabel("Gold Price")
-plt.title("Gold Price Forecast")
+st.pyplot(fig)
 
-st.pyplot(plt)
+# ======================
+# METRICS (OPTIONAL BUT GOOD FOR MARKS)
+# ======================
+st.subheader("📌 Latest Info")
+st.write(f"Last Known Price: {df['Price'].iloc[-1]:.2f}")
+st.write(f"Next Day Prediction: {predictions[0]:.2f}")
