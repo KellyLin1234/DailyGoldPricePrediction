@@ -21,8 +21,7 @@ df = df.sort_values("Date").reset_index(drop=True)
 # LOAD MODELS
 # ======================
 hybrid_model = joblib.load("models/hybrid_rf.pkl")
-lstm_model = load_model("models/lstm_model.h5")
-
+df['LSTM_Pred'] = 0
 # If you used scaler during training (VERY IMPORTANT)
 scaler = joblib.load("models/scaler.pkl")
 
