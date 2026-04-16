@@ -5,49 +5,47 @@ import joblib
 import matplotlib.pyplot as plt
 
 # ======================
-# LOAD MODEL + SCALER
+# LOAD MODEL
 # ======================
-model = joblib.load("models/rf_model.pkl")
+model = joblib.load("models/random_forest.pkl")
 scaler = joblib.load("models/scaler.pkl")
 
 # ======================
 # LOAD DATA
 # ======================
-df = pd.read_csv("data/Gold Price.csv")
+df = pd.read_csv("Gold Price.csv")
 df['Date'] = pd.to_datetime(df['Date'])
 df = df.sort_values('Date').reset_index(drop=True)
 
-# ======================
-# FEATURE (OLD MODEL STYLE: ONLY LAG1)
-# ======================
-df['Lag1'] = df['Price'].shift(1)
-df = df.dropna()
+st.title("💰 Gold Price Prediction (10-Year Forecast)")
 
-st.title("💰 Gold Price Prediction App (Legacy Model)")
-
-n_days = st.slider("Days to Predict", 1, 30, 7)
+years = st.slider("Years to Predict", 1, 10, 10)
+n_days = years * 365
 
 # ======================
-# START FROM LAST KNOWN VALUE
+# INITIAL VALUES
 # ======================
-lag1 = df['Price'].iloc[-1]
+prices = df['Price'].values.tolist()
 
 predictions = []
 
+# ======================
+# ROLLING FORECAST
+# ======================
 for _ in range(n_days):
 
-    # ONLY 1 FEATURE (IMPORTANT)
-    X = np.array([[lag1]])
+    lag1 = prices[-1]
+    lag2 = prices[-2]
+    lag3 = prices[-3]
+    ma7 = np.mean(prices[-7:])
 
-    # scale
+    X = np.array([[lag1, lag2, lag3, ma7]])
     X_scaled = scaler.transform(X)
 
-    # predict
     pred = model.predict(X_scaled)[0]
-    predictions.append(pred)
 
-    # update lag
-    lag1 = pred
+    predictions.append(pred)
+    prices.append(pred)
 
 # ======================
 # FUTURE DATES
@@ -63,22 +61,20 @@ pred_df = pd.DataFrame({
 })
 
 # ======================
-# OUTPUT
+# DISPLAY
 # ======================
-st.subheader("📊 Predictions")
-st.dataframe(pred_df)
+st.subheader("📊 10-Year Forecast")
+st.dataframe(pred_df.head(30))  # show first 30 days only
 
 # ======================
-# PLOT
+# PLOT (sample view)
 # ======================
-fig, ax = plt.subplots(figsize=(10, 5))
+fig, ax = plt.subplots(figsize=(12, 5))
 
-ax.plot(df['Date'], df['Price'], label="Historical")
-ax.plot(pred_df['Date'], pred_df['Predicted Price'], label="Forecast", linestyle='dashed')
+ax.plot(df['Date'], df['Price'], label="History")
+ax.plot(pred_df['Date'], pred_df['Predicted Price'], label="Forecast")
 
-ax.set_title("Gold Price Forecast (Legacy Model)")
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
+ax.set_title("10-Year Gold Price Prediction")
 ax.legend()
 
 st.pyplot(fig)
