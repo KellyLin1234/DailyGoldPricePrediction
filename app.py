@@ -21,7 +21,7 @@ df = df.sort_values("Date").reset_index(drop=True)
 # ======================
 # LOAD MODEL (BEST MODEL)
 # ======================
-model = joblib.load("models/hybrid.pkl")
+model = joblib.load("models/hybrid_rf.pkl")
 
 # ======================
 # SIDEBAR CONTROLS
