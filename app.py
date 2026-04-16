@@ -81,8 +81,7 @@ for _ in range(n_days):
     ma7 = np.mean(history)
 
     # ===== LSTM FEATURE =====
-    lstm_input = create_lstm_input(prices)
-    lstm_pred = lstm_model.predict(lstm_input, verbose=0)[0][0]
+   lstm_pred = df['LSTM_Pred'].iloc[-1] if 'LSTM_Pred' in df.columns else 0
 
     # inverse transform if needed
     lstm_pred = scaler.inverse_transform([[lstm_pred]])[0][0]
