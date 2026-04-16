@@ -5,10 +5,16 @@ import joblib
 import matplotlib.pyplot as plt
 
 # ======================
+# PAGE SETUP
+# ======================
+st.set_page_config(page_title="Gold Price Predictor", layout="wide")
+
+st.title("💰 Gold Price Prediction (Multi-Step Forecast)")
+
+# ======================
 # LOAD MODEL
 # ======================
 model = joblib.load("models/random_forest.pkl")
-scaler = joblib.load("models/scaler.pkl")
 
 # ======================
 # LOAD DATA
@@ -17,35 +23,45 @@ df = pd.read_csv("Gold Price.csv")
 df['Date'] = pd.to_datetime(df['Date'])
 df = df.sort_values('Date').reset_index(drop=True)
 
-st.title("💰 Gold Price Prediction (10-Year Forecast)")
-
+# ======================
+# USER INPUT
+# ======================
 years = st.slider("Years to Predict", 1, 10, 10)
 n_days = years * 365
 
 # ======================
-# INITIAL VALUES
+# MULTI-STEP FORECAST
 # ======================
-prices = df['Price'].values.tolist()
 
 predictions = []
 
-# ======================
-# ROLLING FORECAST
-# ======================
+last_prices = df['Price'].values.tolist()
+
+lag1 = last_prices[-1]
+lag2 = last_prices[-2]
+
+price_history = last_prices[-7:].copy()
+
 for _ in range(n_days):
 
-    lag1 = prices[-1]
-    lag2 = prices[-2]
-    lag3 = prices[-3]
-    ma7 = np.mean(prices[-7:])
+    # MA7 feature
+    ma7 = np.mean(price_history)
 
-    X = np.array([[lag1, lag2, lag3, ma7]])
-    X_scaled = scaler.transform(X)
+    # Feature vector (MUST match training)
+    X = np.array([[lag1, lag2, ma7]])
 
-    pred = model.predict(X_scaled)[0]
+    # Predict next price
+    pred_price = model.predict(X)[0]
 
-    predictions.append(pred)
-    prices.append(pred)
+    predictions.append(pred_price)
+
+    # Update lag values
+    lag2 = lag1
+    lag1 = pred_price
+
+    # Update rolling window
+    price_history.append(pred_price)
+    price_history.pop(0)
 
 # ======================
 # FUTURE DATES
@@ -61,20 +77,31 @@ pred_df = pd.DataFrame({
 })
 
 # ======================
-# DISPLAY
+# DISPLAY TABLE
 # ======================
-st.subheader("📊 10-Year Forecast")
-st.dataframe(pred_df.head(30))  # show first 30 days only
+st.subheader("📊 Forecast Data")
+st.dataframe(pred_df.head(30))
 
 # ======================
-# PLOT (sample view)
+# PLOT
 # ======================
 fig, ax = plt.subplots(figsize=(12, 5))
 
-ax.plot(df['Date'], df['Price'], label="History")
+ax.plot(df['Date'], df['Price'], label="Historical Price")
 ax.plot(pred_df['Date'], pred_df['Predicted Price'], label="Forecast")
 
-ax.set_title("10-Year Gold Price Prediction")
+ax.set_title("Gold Price Forecast")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
 ax.legend()
 
 st.pyplot(fig)
+
+# ======================
+# SUMMARY METRICS
+# ======================
+st.subheader("📈 Forecast Summary")
+
+st.write("Last Actual Price:", df['Price'].iloc[-1])
+st.write("Predicted End Price:", predictions[-1])
+st.write("Total Change:", predictions[-1] - df['Price'].iloc[-1])
