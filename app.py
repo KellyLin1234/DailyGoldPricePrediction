@@ -74,7 +74,7 @@ for _ in range(n_days):
     ma7 = np.mean(history)
 
     # use last known LSTM feature (NO TensorFlow needed)
-    lstm_pred = df['LSTM_Pred'].iloc[-1]
+    lstm_pred = np.mean(df['LSTM_Pred'].iloc[-30:])
 
     # model input must match training
     X = np.array([[lag1, lag2, ma7, lstm_pred]])
@@ -87,7 +87,7 @@ for _ in range(n_days):
     lag1 = pred
 
     # update rolling history
-    history.append(pred)
+    history.append(df['Price'].iloc[-1])
     history = history[-7:]
 
 # ======================
