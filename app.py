@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
-
+from PIL import Image
+def load_img(path):
+    return Image.open(path)
 # ======================
 # PAGE CONFIG
 # ======================
