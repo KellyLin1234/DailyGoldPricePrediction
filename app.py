@@ -129,6 +129,22 @@ st.pyplot(fig)
 # ======================
 # SUMMARY
 # ======================
+st.subheader("📊 Model Performance Comparison")
+
+st.markdown("### 📋 Performance Table")
+st.image("model_performance_table.png", use_container_width=True)
+
+st.markdown("### 📉 RMSE Comparison")
+st.image("rmse_comparison.png", use_container_width=True)
+
+st.markdown("### 📈 R² Score Comparison")
+st.image("R2 Score Comparison_comparison.png", use_container_width=True)
+
+st.markdown("### 📊 MAE Comparison")
+st.image("mae_comparison.png", use_container_width=True)
+
+st.markdown("### 📉 MAPE Comparison")
+st.image("mape_comparison.png", use_container_width=True)
 st.subheader("📊 Forecast Summary")
 
 start_price = predictions[0]
