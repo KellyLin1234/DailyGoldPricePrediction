@@ -69,8 +69,6 @@ def build_latest_features(hist):
 
     return df_tmp.iloc[-1]
 
-df_feat = create_features(df)
-
 # ======================
 # GET LAST STATE ONLY (KEY SPEED FIX)
 # ======================
