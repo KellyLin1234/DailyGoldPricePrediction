@@ -3,131 +3,184 @@ import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
+from datetime import timedelta
 
 # ======================
-# PAGE CONFIG
+# 1. PAGE CONFIG
 # ======================
-st.set_page_config(page_title="Gold Intelligence Dashboard", layout="wide")
+st.set_page_config(page_title="Gold Price Prediction", layout="wide")
 
-st.title("💰 Gold Price Prediction Dashboard")
-
-# ======================
-# LOAD DATA
-# ======================
-df = pd.read_csv("Gold Price.csv")
-df['Date'] = pd.to_datetime(df['Date'])
-df = df.sort_values("Date").reset_index(drop=True)
+st.title("💰 Gold Price Prediction & Model Comparison")
+st.markdown("Baseline: Random Forest | Comparing Multiple Models")
 
 # ======================
-# LOAD MODEL (BEST MODEL)
+# 2. LOAD ASSETS
 # ======================
-model = joblib.load("models/gradient_boosting.pkl")
+@st.cache_resource
+def load_assets():
+    try:
+        rf = joblib.load("models/rf.pkl")
+        lr = joblib.load("models/lr.pkl")
+        gb = joblib.load("models/gb.pkl")
+        scaler = joblib.load("models/scaler.pkl")
+        metrics = joblib.load("models/metrics.pkl")
+        data = pd.read_csv("data/gold.csv")
 
-# ======================
-# SIDEBAR CONTROLS
-# ======================
-st.sidebar.header("Forecast Settings")
+        return rf, lr, gb, scaler, metrics, data
 
-years = st.sidebar.slider("Forecast Horizon (Years)", 1, 10, 5)
-n_days = years * 365
+    except Exception as e:
+        st.error("❌ Error loading models or data. Check your file paths.")
+        st.stop()
 
-st.sidebar.success("Active Model: Gradient Boosting")
-
-# ======================
-# KPI SECTION
-# ======================
-last_price = df['Price'].iloc[-1]
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Current Gold Price", f"{last_price:,.2f}")
-col2.metric("Model", "Gradient Boosting")
-col3.metric("Forecast Horizon", f"{years} Years")
+rf, lr, gb, scaler, metrics, data = load_assets()
 
 # ======================
-# HISTORICAL DATA PLOT
+# 3. PREP DATA
 # ======================
-st.subheader("📈 Historical Gold Price")
+data['Date'] = pd.to_datetime(data['Date'])
+data = data.sort_values('Date')
 
-fig, ax = plt.subplots(figsize=(14, 5))
-ax.plot(df['Date'], df['Price'], linewidth=2)
-ax.set_title("Gold Price History")
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
+# Use ONLY lag1 (simple + stable)
+data['lag1'] = data['Close'].shift(1)
+data = data.dropna()
+
+X = data[['lag1']]
+y = data['Close']
+
+X_scaled = scaler.transform(X)
+
+# Train-test split (same as training)
+split = int(len(X_scaled) * 0.8)
+X_test = X_scaled[split:]
+y_test = y.iloc[split:]
+
+# ======================
+# 4. PREDICTIONS
+# ======================
+rf_pred = rf.predict(X_test)
+lr_pred = lr.predict(X_test)
+gb_pred = gb.predict(X_test)
+
+# ======================
+# 5. MODEL COMPARISON UI
+# ======================
+st.subheader("📊 Model Performance Comparison")
+
+results = pd.DataFrame({
+    "Model": ["Random Forest (Baseline)", "Linear Regression", "Gradient Boosting"],
+    "MAE": [
+        metrics["rf"]["MAE"],
+        metrics["lr"]["MAE"],
+        metrics["gb"]["MAE"]
+    ],
+    "RMSE": [
+        metrics["rf"]["RMSE"],
+        metrics["lr"]["RMSE"],
+        metrics["gb"]["RMSE"]
+    ],
+    "R2": [
+        metrics["rf"]["R2"],
+        metrics["lr"]["R2"],
+        metrics["gb"]["R2"]
+    ]
+})
+
+st.dataframe(results, use_container_width=True)
+
+# ======================
+# 6. BEST MODEL
+# ======================
+best_model = results.sort_values("RMSE").iloc[0]
+
+st.success(f"""
+🏆 Best Model: {best_model['Model']}
+
+RMSE: {best_model['RMSE']:.2f}  
+R²: {best_model['R2']:.4f}
+""")
+
+# ======================
+# 7. PLOT COMPARISON
+# ======================
+st.subheader("📈 Prediction Comparison")
+
+fig, ax = plt.subplots(figsize=(10, 5))
+
+ax.plot(y_test.values, label="Actual", linewidth=2)
+ax.plot(rf_pred, label="Random Forest")
+ax.plot(lr_pred, label="Linear Regression")
+ax.plot(gb_pred, label="Gradient Boosting")
+
+ax.legend()
+ax.set_title("Model Predictions vs Actual")
+
 st.pyplot(fig)
 
 # ======================
-# FORECAST ENGINE (CLEAN + STABLE)
+# 8. FORECAST SECTION
 # ======================
-st.subheader("🔮 Forecast")
+st.subheader("🔮 Future Forecast")
 
-prices = df['Price'].values.tolist()
+years = st.slider("Years to Predict", 1, 10, 1)
+days = years * 365
 
-lag1 = prices[-1]
-lag2 = prices[-2]
+# Use BEST model for forecasting
+model_map = {
+    "Random Forest (Baseline)": rf,
+    "Linear Regression": lr,
+    "Gradient Boosting": gb
+}
 
-history = prices[-7:].copy()
-predictions = []
+best_model_name = best_model["Model"]
+model = model_map[best_model_name]
 
-alpha = 0.85  # stability factor (prevents drift)
+# Start from last known value
+last_value = data['Close'].iloc[-1]
+current_input = np.array([[last_value]])
 
-for _ in range(n_days):
+future_preds = []
 
-    ma7 = np.mean(history)
+for _ in range(days):
+    scaled_input = scaler.transform(current_input)
+    pred = model.predict(scaled_input)[0]
 
-    # stabilized lags (prevents runaway recursion)
-    lag1_stable = alpha * lag1 + (1 - alpha) * prices[-1]
-    lag2_stable = alpha * lag2 + (1 - alpha) * prices[-2]
+    future_preds.append(pred)
 
-    X = np.array([[lag1_stable, lag2_stable, ma7]])
+    # update lag1
+    current_input = np.array([[pred]])
 
-    pred = model.predict(X)[0]
-    predictions.append(pred)
-
-    # update lag structure
-    lag2 = lag1
-    lag1 = pred
-
-    # IMPORTANT: keep MA anchored to real data
-    history = prices[-7:]
-
-# ======================
-# FUTURE DATES
-# ======================
-future_dates = pd.date_range(
-    start=df['Date'].iloc[-1] + pd.Timedelta(days=1),
-    periods=n_days
-)
+# Create future dates
+last_date = data['Date'].iloc[-1]
+future_dates = [last_date + timedelta(days=i) for i in range(1, days+1)]
 
 forecast_df = pd.DataFrame({
     "Date": future_dates,
-    "Price": predictions
+    "Predicted Price": future_preds
 })
 
 # ======================
-# FORECAST PLOT
+# 9. FORECAST PLOT
 # ======================
-fig, ax = plt.subplots(figsize=(14, 5))
+st.subheader("📅 Forecast Plot")
 
-ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
+fig2, ax2 = plt.subplots(figsize=(10, 5))
 
-ax.set_title("Gold Price Forecast (Gradient Boosting)")
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
+ax2.plot(data['Date'].tail(200), data['Close'].tail(200), label="Historical")
+ax2.plot(forecast_df['Date'], forecast_df['Predicted Price'], label="Forecast")
 
-st.pyplot(fig)
+ax2.legend()
+ax2.set_title(f"Future Forecast using {best_model_name}")
+
+st.pyplot(fig2)
 
 # ======================
-# SUMMARY
+# 10. SHOW DATA
 # ======================
-st.subheader("📊 Forecast Summary")
+with st.expander("📂 View Forecast Data"):
+    st.dataframe(forecast_df)
 
-start_price = predictions[0]
-end_price = predictions[-1]
-
-change_pct = ((end_price - start_price) / start_price) * 100
-
-if change_pct > 0:
-    st.success(f"📈 Expected Growth: +{change_pct:.2f}% over {years} years")
-else:
-    st.warning(f"📉 Expected Decline: {change_pct:.2f}% over {years} years")
+# ======================
+# 11. FOOTER
+# ======================
+st.markdown("---")
+st.markdown("✅ Random Forest used as baseline. Models compared using MAE, RMSE, and R².")
