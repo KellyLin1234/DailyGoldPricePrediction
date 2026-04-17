@@ -2,6 +2,6 @@ streamlit
 numpy
 pandas
 scikit-learn
-keras
-joblib
 matplotlib
+joblib
+torch
