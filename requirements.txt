@@ -4,4 +4,4 @@ pandas
 scikit-learn
 matplotlib
 joblib
-torch==2.2.0
+torch==2.1.2
