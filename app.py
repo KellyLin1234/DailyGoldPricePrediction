@@ -134,11 +134,9 @@ if uploaded_file is not None and rf_model is not None:
                 title="10-Year Autoregressive Gold Price Forecast",
                 xaxis_title="Date",
                 yaxis_title="Price (USD)",
-                hovermode="x unified",
-                template="plotly_white"
+                hovermode="x unified"
             )
 
-            st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("👈 Please upload your 'Gold Price.csv' file in the sidebar to begin.")
 # ======================
