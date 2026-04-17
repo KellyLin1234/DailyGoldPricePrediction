@@ -101,9 +101,10 @@ if st.sidebar.button("🚀 Run Forecast"):
         forecast = yearly_forecast(gb, years)
 
     else:
-        rf_f = yearly_forecast(rf, years)
-        gb_f = yearly_forecast(gb, years)
-        forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
+rf_f = yearly_forecast(rf, history, years)
+gb_f = yearly_forecast(gb, history, years)
+
+forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
 
     # ======================
     # DISPLAY
