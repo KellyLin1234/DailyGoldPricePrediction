@@ -10,6 +10,38 @@ from PIL import Image
 # ======================
 st.set_page_config(page_title="Gold Forecast Dashboard", layout="wide")
 
+# ======================
+# 🎨 CUSTOM GOLD THEME UI
+# ======================
+st.markdown("""
+    <style>
+        .main {
+            background-color: #0E1117;
+        }
+
+        h1, h2, h3 {
+            color: #D4AF37;
+        }
+
+        .stMetric {
+            background-color: #1C1F26;
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .stButton>button {
+            background-color: #D4AF37;
+            color: black;
+            font-weight: bold;
+            border-radius: 10px;
+        }
+
+        .stSidebar {
+            background-color: #11151C;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 def load_img(path):
     return Image.open(path)
 
@@ -34,7 +66,8 @@ features = joblib.load("models/features.pkl")
 # ======================
 # SIDEBAR
 # ======================
-st.sidebar.title("Forecast Settings")
+st.sidebar.title("📊 Forecast Settings")
+st.sidebar.markdown("### Model Control Panel")
 
 years = st.sidebar.slider("Forecast Years", 1, 10, 10)
 days = years * 365
@@ -83,7 +116,7 @@ def smooth(series, window=20):
     return pd.Series(series).rolling(window, min_periods=1).mean().tolist()
 
 # ======================
-# RF FORECAST
+# FORECAST MODELS
 # ======================
 def rf_forecast(history, steps):
     hist = history.copy()
@@ -105,9 +138,6 @@ def rf_forecast(history, steps):
 
     return result
 
-# ======================
-# GB FORECAST
-# ======================
 def gb_forecast(history, steps):
     hist = history.copy()
     result = []
@@ -128,9 +158,6 @@ def gb_forecast(history, steps):
 
     return result
 
-# ======================
-# HYBRID
-# ======================
 def hybrid_forecast(history, steps):
     rf_res = rf_forecast(history, steps)
     gb_res = gb_forecast(history, steps)
@@ -138,16 +165,14 @@ def hybrid_forecast(history, steps):
     return [0.6*r + 0.4*g for r, g in zip(rf_res, gb_res)]
 
 # ======================
-# YEARLY CONVERSION
+# YEARLY MODE
 # ======================
 def convert_to_yearly(forecast, start_year=2026):
     forecast = np.array(forecast)
 
     yearly = []
-
     for i in range(0, len(forecast), 365):
         chunk = forecast[i:i+365]
-
         if len(chunk) > 0:
             yearly.append(np.median(chunk))
 
@@ -161,7 +186,7 @@ def convert_to_yearly(forecast, start_year=2026):
 # ======================
 # RUN FORECAST
 # ======================
-if st.sidebar.button("Run Forecast"):
+if st.sidebar.button("🚀 Run Forecast"):
 
     # generate forecast
     if model_choice == "Random Forest":
@@ -178,25 +203,45 @@ if st.sidebar.button("Run Forecast"):
         gb_f = gb_forecast(history, days)
         forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
 
-    # SMOOTH FORECAST (IMPORTANT FIX)
-    forecast = smooth(forecast, window=20)
+    forecast = smooth(forecast, 20)
+
+    # ======================
+    # KPI METRICS
+    # ======================
+    st.subheader("📌 Market Summary")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
+    col2.metric("Max Price", f"${df['Price'].max():,.2f}")
+    col3.metric("Min Price", f"${df['Price'].min():,.2f}")
+
+    # trend insight
+    trend = "📈 Upward Trend" if forecast[-1] > forecast[0] else "📉 Downward Trend"
+
+    st.markdown(f"""
+    ### 📊 Market Insight
+    - Trend: **{trend}**
+    - Forecast Horizon: **{years} years**
+    - Model: **{model_choice}**
+    """)
 
     # ======================
     # DAILY MODE
     # ======================
     if mode == "Daily Forecast":
 
-        st.subheader("📈 Smoothed 10-Year Daily Gold Forecast")
+        st.subheader("📈 Smoothed 10-Year Daily Forecast")
 
-        fig, ax = plt.subplots()
-        ax.plot(forecast, linewidth=2)
+        fig, ax = plt.subplots(figsize=(10,5))
+        ax.plot(forecast, linewidth=2, color="#D4AF37")
         ax.set_title("Gold Price Forecast")
         ax.set_xlabel("Days")
         ax.set_ylabel("Price")
 
         st.pyplot(fig)
 
-        st.write(pd.DataFrame({"Forecast": forecast}))
+        st.dataframe(pd.DataFrame({"Forecast": forecast}))
 
     # ======================
     # YEARLY MODE
@@ -208,73 +253,19 @@ if st.sidebar.button("Run Forecast"):
         st.subheader("📊 Yearly Financial Forecast")
 
         fig, ax = plt.subplots()
-        ax.plot(yearly_df["Year"], yearly_df["Average Gold Price"], marker="o")
+        ax.plot(yearly_df["Year"], yearly_df["Average Gold Price"], marker="o", color="#D4AF37")
         ax.set_title("Yearly Gold Price Trend")
         ax.set_xlabel("Year")
         ax.set_ylabel("Price")
 
         st.pyplot(fig)
 
-        st.write(yearly_df)
+        st.dataframe(yearly_df)
 
     st.success("Forecast completed successfully!")
 
 # ======================
-# EDA & VISUALIZATION DASHBOARD
+# DATA PREVIEW
 # ======================
-st.title("📊 Gold Market Analysis Dashboard")
-
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Price Trends",
-    "Volume Analysis",
-    "Distribution & Correlation",
-    "Model Performance"
-])
-
-# ======================
-# TAB 1 - PRICE TRENDS
-# ======================
-with tab1:
-    st.subheader("Gold Price Trends (2014–2026)")
-
-    st.image(load_img("plot_graph/Daily Gold Price Trend from 2014 to 2026.png"))
-    st.image(load_img("plot_graph/Historical price trends of gold (2014-2026).png"))
-    st.image(load_img("plot_graph/Comparison of Open and Price Trajectories (2014-2026).png"))
-    st.image(load_img("plot_graph/Daily Opening Price Fluctuations (2014-2026).png"))
-    st.image(load_img("plot_graph/Daily Highest Price of Gold (2014–2026).png"))
-    st.image(load_img("plot_graph/Daily Lowest Price of Gold (2014–2026).png"))
-
-# ======================
-# TAB 2 - VOLUME ANALYSIS
-# ======================
-with tab2:
-    st.subheader("Trading Volume Analysis")
-
-    st.image(load_img("plot_graph/Average Trading Volume Comparison.png"))
-    st.image(load_img("plot_graph/Gold Trading Volume Over Date.png"))
-    st.image(load_img("plot_graph/Gold Trading Volume Over Year.png"))
-    st.image(load_img("plot_graph/Relationship Between Volume and Gold Price.png"))
-
-# ======================
-# TAB 3 - DISTRIBUTION & CORRELATION
-# ======================
-with tab3:
-    st.subheader("Statistical Analysis")
-
-    st.image(load_img("plot_graph/Distribution of Daily Gold Prices.png"))
-    st.image(load_img("plot_graph/Distribution of Gold Price Percentage Change.png"))
-    st.image(load_img("plot_graph/Correlation between Open and Price.png"))
-    st.image(load_img("plot_graph/Market Volatility Comparison.png"))
-    st.image(load_img("plot_graph/Gold Price Time Series with Holiday Events.png"))
-
-# ======================
-# TAB 4 - MODEL PERFORMANCE
-# ======================
-with tab4:
-    st.subheader("Model Evaluation Results")
-
-    st.image(load_img("plot_graph/mae_comparison.png"))
-    st.image(load_img("plot_graph/mape_comparison.png"))
-    st.image(load_img("plot_graph/rmse_comparison.png"))
-    st.image(load_img("plot_graph/R2_score_comparison.png"))
-    st.image(load_img("plot_graph/model_performance_table.png"))
+st.subheader("📁 Latest Data")
+st.dataframe(df.tail())
