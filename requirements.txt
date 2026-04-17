@@ -4,4 +4,4 @@ pandas
 scikit-learn
 matplotlib
 joblib
-torch
+torch --index-url https://download.pytorch.org/whl/cpu
