@@ -94,15 +94,17 @@ model_choice = st.sidebar.selectbox("Model", ["Random Forest", "Gradient Boostin
 # ======================
 if st.sidebar.button("🚀 Run Forecast"):
 
-    if model_choice == "Random Forest":
-        forecast = yearly_forecast(rf, years)
+if model_choice == "Random Forest":
+    forecast = yearly_forecast(rf, history, years)
 
-    elif model_choice == "Gradient Boosting":
-        forecast = yearly_forecast(gb, years)
+elif model_choice == "Gradient Boosting":
+    forecast = yearly_forecast(gb, history, years)
 
-    else:
-rf_f = yearly_forecast(rf, history, years)
-gb_f = yearly_forecast(gb, history, years)
+else:
+    rf_f = yearly_forecast(rf, history, years)
+    gb_f = yearly_forecast(gb, history, years)
+
+    forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
 
 forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
 
