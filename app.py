@@ -86,13 +86,18 @@ def rf_forecast(history, steps):
         x = tmp[features].iloc[-1:].values
         pred = rf.predict(x)[0]
 
-        next_val = tmp['Lag1'].iloc[-1] + np.clip(pred, -0.03, 0.03)
-        hist.append(next_val)
+        # 🔥 stabilize prediction
+        pred = np.clip(pred, -0.02, 0.02)
 
+        next_val = tmp['Lag1'].iloc[-1] + pred
+
+        # safety clamp (prevents explosion)
+        next_val = np.clip(next_val, np.log(500), np.log(5000))
+
+        hist.append(next_val)
         result.append(np.exp(next_val))
 
     return result
-
 
 def gb_forecast(history, steps):
     hist = history.copy()
@@ -105,9 +110,12 @@ def gb_forecast(history, steps):
         x = tmp[features].iloc[-1:].values
         pred = gb.predict(x)[0]
 
-        next_val = tmp['Lag1'].iloc[-1] + np.clip(pred, -0.03, 0.03)
-        hist.append(next_val)
+        pred = np.clip(pred, -0.02, 0.02)
 
+        next_val = tmp['Lag1'].iloc[-1] + pred
+        next_val = np.clip(next_val, np.log(500), np.log(5000))
+
+        hist.append(next_val)
         result.append(np.exp(next_val))
 
     return result
@@ -117,7 +125,8 @@ def hybrid_forecast(history, steps):
     rf_res = rf_forecast(history, steps)
     gb_res = gb_forecast(history, steps)
 
-    return [(r + g) / 2 for r, g in zip(rf_res, gb_res)]
+    # weighted average (more stable than 0.5/0.5)
+    return [0.6*r + 0.4*g for r, g in zip(rf_res, gb_res)]
 
 # ======================
 # YEARLY CONVERSION
