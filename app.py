@@ -1,136 +1,174 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
+import numpy as np
 import joblib
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from datetime import timedelta
 
-# ======================
-# PAGE CONFIG
-# ======================
-st.set_page_config(page_title="Gold Forecast (Yearly Fast Mode)", layout="wide")
+# ==========================================
+# PAGE CONFIGURATION
+# ==========================================
+st.set_page_config(page_title="Gold Price Predictor", layout="wide")
+st.title("📈 Gold Price 10-Year Forecaster")
+st.markdown("""
+This app uses your trained Random Forest model to autoregressively predict future gold prices.
+**Note:** Long-term recursive forecasting on financial data is highly volatile due to compounding errors.
+""")
 
-# ======================
-# LOAD DATA
-# ======================
-df = pd.read_csv("Gold Price.csv")
+# ==========================================
+# HELPER FUNCTIONS
+# ==========================================
+@st.cache_resource
+def load_model(model_path):
+    try:
+        return joblib.load(model_path)
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
-df['Date'] = pd.to_datetime(df['Date'])
-df = df.sort_values('Date')
-df['Price'] = df['Price'].ffill()
-df['Price_Log'] = np.log(df['Price'])
+def calculate_recursive_features(log_prices):
+    """
+    Reconstructs the exact features used in the Random Forest model:
+    Lag1, Lag2, Lag3, Lag5, Lag10, MA7, MA14, Volatility7, Volatility14, Momentum
+    """
+    # Pandas rolling std uses ddof=1 by default
+    vol_7 = np.std(log_prices[-7:], ddof=1) if len(log_prices) >= 7 else 0
+    vol_14 = np.std(log_prices[-14:], ddof=1) if len(log_prices) >= 14 else 0
 
-# ======================
-# LOAD MODELS
-# ======================
-rf = joblib.load("models/random_forest_log.pkl")
-gb = joblib.load("models/gradient_boosting_log.pkl")
-features = joblib.load("models/features.pkl")
+    features = {
+        "Lag1": log_prices[-1],
+        "Lag2": log_prices[-2],
+        "Lag3": log_prices[-3],
+        "Lag5": log_prices[-5],
+        "Lag10": log_prices[-10],
+        "MA7": np.mean(log_prices[-7:]),
+        "MA14": np.mean(log_prices[-14:]),
+        "Volatility7": vol_7,
+        "Volatility14": vol_14,
+        "Momentum": log_prices[-1] - log_prices[-6]  # Equivalent to current - shift(5)
+    }
+    
+    # Return as a 2D array for sklearn prediction
+    return pd.DataFrame([features])
 
-# ======================
-# FEATURE ENGINEERING
-# ======================
-def create_features(df):
-    df = df.copy()
+# ==========================================
+# SIDEBAR / INPUTS
+# ==========================================
+st.sidebar.header("Configuration")
+data_file = st.sidebar.file_uploader("Upload Historical Gold Price CSV", type=["csv"])
 
-    df['Lag1'] = df['Price_Log'].shift(1)
-    df['Lag2'] = df['Price_Log'].shift(2)
-    df['Lag3'] = df['Price_Log'].shift(3)
-    df['Lag5'] = df['Price_Log'].shift(5)
-    df['Lag10'] = df['Price_Log'].shift(10)
+# Default to 10 years (approx 2520 trading days)
+prediction_years = st.sidebar.slider("Years to Predict", min_value=1, max_value=10, value=10)
+prediction_days = prediction_years * 252 
 
-    df['MA7'] = df['Price_Log'].rolling(7, min_periods=1).mean()
-    df['MA14'] = df['Price_Log'].rolling(14, min_periods=1).mean()
-    df['MA30'] = df['Price_Log'].rolling(30, min_periods=1).mean()
+# Load Model
+# Defaulting to the Random Forest model from your notebook
+model = load_model("models/random_forest_log.pkl")
 
-    df['Volatility7'] = df['Price_Log'].rolling(7, min_periods=1).std().fillna(0)
-    df['Volatility14'] = df['Price_Log'].rolling(14, min_periods=1).std().fillna(0)
+# ==========================================
+# MAIN APP LOGIC
+# ==========================================
+if data_file is not None and model is not None:
+    # 1. Load and Clean Historical Data
+    df = pd.read_csv(data_file)
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.sort_values('Date').reset_index(drop=True)
+    df['Price'] = pd.to_numeric(df['Price'], errors='coerce').ffill()
+    df = df.dropna()
+    
+    st.subheader("Historical Data Preview")
+    st.dataframe(df.tail())
 
-    df['Momentum'] = df['Price_Log'] - df['Price_Log'].shift(5)
-    df['Momentum'] = df['Momentum'].fillna(0)
+    if st.button("Generate Forecast"):
+        with st.spinner(f"Simulating {prediction_days} days into the future..."):
+            # 2. Setup the initial window
+            # We need at least the last 14 days for Volatility14, but let's grab 30 to be safe
+            historical_prices = df['Price'].values
+            log_prices = list(np.log(historical_prices[-30:]))
+            
+            future_prices = []
+            last_date = df['Date'].iloc[-1]
+            future_dates = []
 
-    return df.dropna()
+            # 3. Autoregressive Prediction Loop
+            for i in range(prediction_days):
+                # Calculate features for the next step
+                X_next = calculate_recursive_features(log_prices)
+                
+                # Predict Log Return
+                pred_log_return = model.predict(X_next)[0]
+                
+                # Calculate new log price: Lag1 (which is log_prices[-1]) + predicted return
+                next_log_price = log_prices[-1] + pred_log_return
+                
+                # Append to our running log_prices buffer (so the next iteration can use it)
+                log_prices.append(next_log_price)
+                
+                # Convert back to real price and store
+                next_real_price = np.exp(next_log_price)
+                future_prices.append(next_real_price)
+                
+                # Increment date (adding business days for financial data)
+                last_date += timedelta(days=1)
+                # Simple logic to skip weekends
+                if last_date.weekday() >= 5: 
+                    last_date += timedelta(days=2)
+                future_dates.append(last_date)
 
+            # 4. Compile Results
+            future_df = pd.DataFrame({
+                "Date": future_dates,
+                "Predicted_Price": future_prices
+            })
 
-df_feat = create_features(df)
-history = df_feat['Price_Log'].tolist()
+            # ==========================================
+            # VISUALIZATION
+            # ==========================================
+            st.subheader(f"{prediction_years}-Year Price Forecast")
+            
+            fig = go.Figure()
+            
+            # Plot last 1 year of historical data for context
+            context_df = df.tail(252)
+            fig.add_trace(go.Scatter(
+                x=context_df['Date'], 
+                y=context_df['Price'], 
+                mode='lines', 
+                name='Historical Price',
+                line=dict(color='blue')
+            ))
+            
+            # Plot future predictions
+            fig.add_trace(go.Scatter(
+                x=future_df['Date'], 
+                y=future_df['Predicted_Price'], 
+                mode='lines', 
+                name='Predicted Price',
+                line=dict(color='orange', dash='dot')
+            ))
 
-# ======================
-# FAST YEARLY FORECAST ENGINE
-# ======================
-def yearly_forecast(model, history, years):
-    hist = history.copy()
-    predictions = []
+            fig.update_layout(
+                title="Gold Price: Historical vs. Predicted",
+                xaxis_title="Date",
+                yaxis_title="Price",
+                hovermode="x unified"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
 
-    steps = years  # yearly forecast = 1 step per year
+            # Download Option
+            csv = future_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download Future Predictions as CSV",
+                data=csv,
+                file_name='gold_predictions_10_years.csv',
+                mime='text/csv',
+            )
 
-    for _ in range(steps):
-
-        tmp = pd.DataFrame({"Price_Log": hist})
-        tmp = create_features(tmp)
-
-        x = tmp[features].iloc[-1:].values
-
-        pred = model.predict(x)[0]
-        pred = np.clip(pred, -0.03, 0.03)
-
-        next_val = tmp['Lag1'].iloc[-1] + pred
-        hist.append(next_val)
-
-        predictions.append(np.exp(next_val))
-
-    return predictions
-
-
-def hybrid_forecast(history, years):
-    rf_pred = yearly_forecast(rf, history, years)
-    gb_pred = yearly_forecast(gb, history, years)
-
-    return [(r + g) / 2 for r, g in zip(rf_pred, gb_pred)]
-
-
-# ======================
-# SIDEBAR
-# ======================
-years = st.sidebar.slider("Forecast Years", 1, 10, 10)
-
-model_choice = st.sidebar.selectbox(
-    "Model",
-    ["Random Forest", "Gradient Boosting", "Hybrid"]
-)
-
-# ======================
-# RUN FORECAST
-# ======================
-if st.sidebar.button("🚀 Run Forecast"):
-
-    if model_choice == "Random Forest":
-        forecast = yearly_forecast(rf, history, years)
-
-    elif model_choice == "Gradient Boosting":
-        forecast = yearly_forecast(gb, history, years)
-
-    else:
-        forecast = hybrid_forecast(history, years)
-
-    # ======================
-    # DISPLAY
-    # ======================
-    st.subheader("📊 Yearly Gold Price Forecast (FAST MODE)")
-
-    year_labels = list(range(2026, 2026 + years))
-
-    fig, ax = plt.subplots()
-    ax.plot(year_labels, forecast, marker="o")
-    ax.set_title("Gold Price Forecast (Yearly)")
-    ax.set_xlabel("Year")
-    ax.set_ylabel("Price")
-
-    st.pyplot(fig)
-
-    st.dataframe(pd.DataFrame({
-        "Year": year_labels,
-        "Forecast Price": forecast
-    }))
+elif model is None:
+    st.warning("Could not find the model file. Please ensure `models/random_forest_log.pkl` exists in the app directory.")
+else:
+    st.info("Please upload your historical Gold Price CSV file in the sidebar to begin.")
 
 # ======================
 # DATA PREVIEW
