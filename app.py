@@ -61,22 +61,24 @@ latest_row = df_feat[features].iloc[-1:].values
 # ======================
 # FAST YEARLY FORECAST (NO LOOP FORECAST)
 # ======================
-def yearly_forecast(model, steps=10):
+def yearly_forecast(model, history, steps):
     preds = []
-
-    x = latest_row.copy()
+    hist = history.copy()
 
     for _ in range(steps):
+
+        tmp = pd.DataFrame({"Price_Log": hist})
+        tmp = create_features(tmp)
+
+        x = tmp[features].iloc[-1:].values
+
         pred = model.predict(x)[0]
         pred = np.clip(pred, -0.03, 0.03)
 
-        next_val = history[-1] + pred
-        history.append(next_val)
+        next_val = tmp['Lag1'].iloc[-1] + pred
+        hist.append(next_val)
 
         preds.append(np.exp(next_val))
-
-        # shift features forward (simple stability trick)
-        x = np.roll(x, -1, axis=1)
 
     return preds
 
