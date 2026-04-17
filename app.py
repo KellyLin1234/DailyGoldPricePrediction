@@ -241,12 +241,12 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.subheader("Gold Price Trends (2014–2026)")
 
-    st.image(load_img("plot_graph/Daily Gold Price Trend from 2014 to 2026.png"))
-    st.image(load_img("plot_graph/Historical price trends of gold (2014-2026).png"))
-    st.image(load_img("plot_graph/Comparison of Open and Price Trajectories (2014-2026).png"))
-    st.image(load_img("plot_graph/Daily Opening Price Fluctuations (2014-2026).png"))
-    st.image(load_img("plot_graph/Daily Highest Price of Gold (2014–2026).png"))
-    st.image(load_img("plot_graph/Daily Lowest Price of Gold (2014–2026).png"))
+    st.image("plot_graph/Daily Gold Price Trend from 2014 to 2026.png"))
+    st.image("plot_graph/Historical price trends of gold (2014-2026).png"))
+    st.image("plot_graph/Comparison of Open and Price Trajectories (2014-2026).png"))
+    st.image("plot_graph/Daily Opening Price Fluctuations (2014-2026).png"))
+    st.image("plot_graph/Daily Highest Price of Gold (2014–2026).png"))
+    st.image("plot_graph/Daily Lowest Price of Gold (2014–2026).png"))
 
 # ======================
 # TAB 2 - VOLUME ANALYSIS
