@@ -19,12 +19,12 @@ st.markdown("Baseline: Random Forest | Comparing Multiple Models")
 @st.cache_resource
 def load_assets():
     try:
-        rf = joblib.load("models/rf.pkl")
-        lr = joblib.load("models/lr.pkl")
-        gb = joblib.load("models/gb.pkl")
+        rf = joblib.load("models/random_forest.pkl")
+        lr = joblib.load("models/lstm.pkl")
+        gb = joblib.load("models/gradient_boosting.pkl")
         scaler = joblib.load("models/scaler.pkl")
         metrics = joblib.load("models/metrics.pkl")
-        data = pd.read_csv("data/gold.csv")
+        data = pd.read_csv("Gold Price.csv")
 
         return rf, lr, gb, scaler, metrics, data
 
