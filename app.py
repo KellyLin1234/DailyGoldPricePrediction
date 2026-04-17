@@ -10,19 +10,17 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Gold Price Prediction", layout="wide")
 
 st.title("📈 Gold Price Prediction System")
-st.write("Random Forest Baseline Model (Stable Version)")
+st.write("Random Forest Baseline (Stable Version)")
 
 # ======================
-# LOAD MODEL ARTIFACTS
+# LOAD MODEL ARTIFACTS (FIXED)
 # ======================
 @st.cache_resource
 def load_models():
     model = joblib.load("random_forest_log.pkl")
-    model = joblib.load("gradient_boosting_log.pkl")
-    model = joblib.load("models/lstm_log_model.keras") 
-    model = joblib.load("hybrid_log.pkl")
-    scaler = joblib.load("lstm_log_scaler.pkl")
-    return model, scaler
+    scaler = joblib.load("scaler.pkl")
+    features = joblib.load("features.pkl")
+    return model, scaler, features
 
 model, scaler, features = load_models()
 
@@ -38,6 +36,7 @@ df = df.dropna()
 df["Log_Return"] = np.log(df["Close"] / df["Close"].shift(1))
 df = df.dropna()
 
+# FIX: enforce correct feature order
 df = df[features]
 
 # ======================
@@ -50,28 +49,32 @@ X_scaled = scaler.transform(df)
 # ======================
 pred = model.predict(X_scaled)
 
+# ======================
+# RESULT DATAFRAME
+# ======================
+actual_prices = pd.read_csv("data.csv")["Close"].iloc[-len(pred):].values
+
 df_result = pd.DataFrame({
-    "Actual": pd.read_csv("data.csv")["Close"].iloc[-len(pred):].values,
+    "Actual": actual_prices,
     "Predicted": pred
 })
 
 # ======================
-# SIDEBAR OPTIONS
+# SIDEBAR
 # ======================
 st.sidebar.header("Options")
-
 show_data = st.sidebar.checkbox("Show Data")
-show_chart = st.sidebar.checkbox("Show Prediction Chart")
+show_chart = st.sidebar.checkbox("Show Chart")
 
 # ======================
-# DISPLAY DATA
+# DATA VIEW
 # ======================
 if show_data:
     st.subheader("Dataset Preview")
     st.dataframe(df.tail())
 
 # ======================
-# PLOT RESULTS
+# CHART
 # ======================
 if show_chart:
     st.subheader("Actual vs Predicted")
@@ -86,7 +89,7 @@ if show_chart:
 # ======================
 # METRICS
 # ======================
-st.subheader("Model Output Summary")
+st.subheader("Model Performance")
 
 mae = np.mean(np.abs(df_result["Actual"] - df_result["Predicted"]))
 rmse = np.sqrt(np.mean((df_result["Actual"] - df_result["Predicted"]) ** 2))
