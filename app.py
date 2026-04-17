@@ -115,80 +115,13 @@ history = df_feat['Price_Log'].tolist()
 def smooth(series, window=20):
     return pd.Series(series).rolling(window, min_periods=1).mean().tolist()
 
-# ======================
-# FORECAST MODELS
-# ======================
-def rf_forecast(history, steps):
-    hist = history.copy()
-    result = []
+forecast = None
 
-    for _ in range(steps):
-        tmp = pd.DataFrame({"Price_Log": hist})
-        tmp = create_features(tmp)
-
-        x = tmp[features].iloc[-1:].values
-        pred = rf.predict(x)[0]
-
-        pred = np.clip(pred, -0.03, 0.03)
-
-        next_val = tmp['Lag1'].iloc[-1] + pred
-        hist.append(next_val)
-
-        result.append(max(np.exp(next_val), 1))
-
-    return result
-
-def gb_forecast(history, steps):
-    hist = history.copy()
-    result = []
-
-    for _ in range(steps):
-        tmp = pd.DataFrame({"Price_Log": hist})
-        tmp = create_features(tmp)
-
-        x = tmp[features].iloc[-1:].values
-        pred = gb.predict(x)[0]
-
-        pred = np.clip(pred, -0.03, 0.03)
-
-        next_val = tmp['Lag1'].iloc[-1] + pred
-        hist.append(next_val)
-
-        result.append(max(np.exp(next_val), 1))
-
-    return result
-
-def hybrid_forecast(history, steps):
-    rf_res = rf_forecast(history, steps)
-    gb_res = gb_forecast(history, steps)
-
-    return [0.6*r + 0.4*g for r, g in zip(rf_res, gb_res)]
-
-# ======================
-# YEARLY MODE
-# ======================
-def convert_to_yearly(forecast, start_year=2026):
-    forecast = np.array(forecast)
-
-    yearly = []
-    for i in range(0, len(forecast), 365):
-        chunk = forecast[i:i+365]
-        if len(chunk) > 0:
-            yearly.append(np.median(chunk))
-
-    years = list(range(start_year, start_year + len(yearly)))
-
-    return pd.DataFrame({
-        "Year": years,
-        "Average Gold Price": yearly
-    })
-
-# ======================
-# RUN FORECAST
-# ======================
 if st.sidebar.button("🚀 Run Forecast"):
 
-    # generate forecast
+    # ======================
+    # GENERATE FORECAST
+    # ======================
     if model_choice == "Random Forest":
         forecast = rf_forecast(history, days)
 
@@ -203,7 +136,71 @@ if st.sidebar.button("🚀 Run Forecast"):
         gb_f = gb_forecast(history, days)
         forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
 
-    forecast = smooth(forecast, 20)
+    # ======================
+    # SAFETY CHECK (IMPORTANT)
+    # ======================
+    if forecast is not None:
+
+        forecast = smooth(forecast, 20)
+
+        # ======================
+        # KPI METRICS
+        # ======================
+        st.subheader("📌 Market Summary")
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
+        col2.metric("Max Price", f"${df['Price'].max():,.2f}")
+        col3.metric("Min Price", f"${df['Price'].min():,.2f}")
+
+        trend = "📈 Upward Trend" if forecast[-1] > forecast[0] else "📉 Downward Trend"
+
+        st.markdown(f"""
+        ### 📊 Market Insight
+        - Trend: **{trend}**
+        - Forecast Horizon: **{years} years**
+        - Model: **{model_choice}**
+        """)
+
+        # ======================
+        # DAILY MODE
+        # ======================
+        if mode == "Daily Forecast":
+
+            st.subheader("📈 Smoothed Forecast")
+
+            fig, ax = plt.subplots(figsize=(10,5))
+            ax.plot(forecast, linewidth=2, color="#D4AF37")
+            ax.set_title("Gold Price Forecast")
+            ax.set_xlabel("Days")
+            ax.set_ylabel("Price")
+
+            st.pyplot(fig)
+
+            st.dataframe(pd.DataFrame({"Forecast": forecast}))
+
+        # ======================
+        # YEARLY MODE
+        # ======================
+        else:
+
+            yearly_df = convert_to_yearly(forecast)
+
+            st.subheader("📊 Yearly Financial Forecast")
+
+            fig, ax = plt.subplots()
+            ax.plot(yearly_df["Year"], yearly_df["Average Gold Price"],
+                    marker="o", color="#D4AF37")
+
+            ax.set_title("Yearly Gold Price Trend")
+            ax.set_xlabel("Year")
+            ax.set_ylabel("Price")
+
+            st.pyplot(fig)
+
+            st.dataframe(yearly_df)
+
+        st.success("Forecast completed successfully!"))
 
     # ======================
     # KPI METRICS
