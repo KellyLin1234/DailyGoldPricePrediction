@@ -47,25 +47,27 @@ model_choice = st.sidebar.selectbox(
 # ======================
 # FEATURE ENGINEERING (ONLY FOR LAST STATE)
 # ======================
-def create_features(df):
-    df = df.copy()
+def build_latest_features(hist):
+    df_tmp = pd.DataFrame({"Price_Log": hist})
 
-    df['Lag1'] = df['Price_Log'].shift(1)
-    df['Lag2'] = df['Price_Log'].shift(2)
-    df['Lag3'] = df['Price_Log'].shift(3)
-    df['Lag5'] = df['Price_Log'].shift(5)
-    df['Lag10'] = df['Price_Log'].shift(10)
+    df_tmp['Lag1'] = df_tmp['Price_Log'].shift(1)
+    df_tmp['Lag2'] = df_tmp['Price_Log'].shift(2)
+    df_tmp['Lag3'] = df_tmp['Price_Log'].shift(3)
+    df_tmp['Lag5'] = df_tmp['Price_Log'].shift(5)
+    df_tmp['Lag10'] = df_tmp['Price_Log'].shift(10)
 
-    df['MA7'] = df['Price_Log'].rolling(7).mean()
-    df['MA14'] = df['Price_Log'].rolling(14).mean()
-    df['MA30'] = df['Price_Log'].rolling(30).mean()
+    df_tmp['MA7'] = df_tmp['Price_Log'].rolling(7).mean()
+    df_tmp['MA14'] = df_tmp['Price_Log'].rolling(14).mean()
+    df_tmp['MA30'] = df_tmp['Price_Log'].rolling(30).mean()
 
-    df['Volatility7'] = df['Price_Log'].rolling(7).std()
-    df['Volatility14'] = df['Price_Log'].rolling(14).std()
+    df_tmp['Volatility7'] = df_tmp['Price_Log'].rolling(7).std()
+    df_tmp['Volatility14'] = df_tmp['Price_Log'].rolling(14).std()
 
-    df['Momentum'] = df['Price_Log'] - df['Price_Log'].shift(5)
+    df_tmp['Momentum'] = df_tmp['Price_Log'] - df_tmp['Price_Log'].shift(5)
 
-    return df.dropna()
+    df_tmp = df_tmp.dropna()
+
+    return df_tmp.iloc[-1]
 
 df_feat = create_features(df)
 
