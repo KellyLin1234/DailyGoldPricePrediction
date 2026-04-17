@@ -110,33 +110,34 @@ if uploaded_file is not None and rf_model is not None:
             
             st.subheader(f"Generating Multi-Model Forecasts for the next {forecast_years} years...")
             
-            with st.spinner("Simulating Random Forest..."):
+            with st.spinner("Simulating..."):
                 rf_preds = forecast_future('Random Forest', initial_prices_log, steps, models)
             
-            with st.spinner("Simulating Gradient Boosting..."):
+            with st.spinner("Simulating..."):
                 gb_preds = forecast_future('Gradient Boosting', initial_prices_log, steps, models)
                 
             # ==========================================
-            # VISUALIZATION WITH PLOTLY
+            # VISUALIZATION WITH STREAMLIT NATIVE CHART
             # ==========================================
-            fig = go.Figure()
-
-            # Plot last 2 years of actual data for visual context
-            historical_plot = df.iloc[-500:] 
-            fig.add_trace(go.Scatter(x=historical_plot['Date'], y=historical_plot['Price'],
-                                     mode='lines', name='Actual Price', line=dict(color='black', width=2)))
-
-            # Plot future predictions
-            fig.add_trace(go.Scatter(x=future_dates, y=rf_preds, mode='lines', name='Random Forest', line=dict(color='blue', dash='dot')))
-            fig.add_trace(go.Scatter(x=future_dates, y=gb_preds, mode='lines', name='Gradient Boosting', line=dict(color='orange', dash='dot')))
-
-            fig.update_layout(
-                title="10-Year Autoregressive Gold Price Forecast",
-                xaxis_title="Date",
-                yaxis_title="Price (USD)",
-                hovermode="x unified"
-            )
-
+            st.write("### 10-Year Autoregressive Gold Price Forecast")
+            
+            # 1. Format the historical data (last 500 days for context)
+            hist_df = df.iloc[-500:].copy()
+            hist_df = hist_df[['Date', 'Price']].set_index('Date')
+            hist_df.rename(columns={'Price': 'Actual Historical Price'}, inplace=True)
+            
+            # 2. Format the future forecast data
+            future_df = pd.DataFrame({
+                'Date': future_dates,
+                'Random Forest Forecast': rf_preds,
+                'Gradient Boosting Forecast': gb_preds
+            }).set_index('Date')
+            
+            # 3. Combine them into one dataframe so Streamlit can plot them together
+            plot_df = pd.concat([hist_df, future_df], axis=1)
+            
+            # 4. Display native chart (No Plotly needed!)
+            st.line_chart(plot_df)
 else:
     st.info("👈 Please upload your 'Gold Price.csv' file in the sidebar to begin.")
 # ======================
