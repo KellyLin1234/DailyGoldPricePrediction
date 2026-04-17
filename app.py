@@ -56,11 +56,6 @@ ax.set_xlabel("Date")
 ax.set_ylabel("Price")
 st.pyplot(fig)
 
-# ======================
-# FORECAST ENGINE (FIXED + REALISTIC)
-# ======================
-st.subheader("🔮 Forecast (Stable & Realistic)")
-
 prices = df['Price'].tolist()
 lstm_series = df['LSTM_Pred'].tolist()
 
@@ -135,6 +130,12 @@ st.image("plot_graph/mae_comparison.png", use_container_width=True)
 
 st.markdown("### 📉 MAPE Comparison")
 st.image("plot_graph/mape_comparison.png", use_container_width=True)
+
+
+# ======================
+# FORECAST ENGINE (FIXED + REALISTIC)
+# ======================
+st.subheader("🔮 Forecast (Stable & Realistic)")
 
 # ======================
 # FORECAST PLOT
