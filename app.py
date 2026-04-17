@@ -137,18 +137,19 @@ if st.sidebar.button("🚀 Run Forecast"):
         forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
 
     # ======================
-    # SAFETY CHECK (IMPORTANT)
+    # SAFETY CHECK
     # ======================
     if forecast is not None:
 
         forecast = smooth(forecast, 20)
 
         # ======================
-        # KPI METRICS
+        # KPI METRICS (ONLY ONCE)
         # ======================
         st.subheader("📌 Market Summary")
 
         col1, col2, col3 = st.columns(3)
+
         col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
         col2.metric("Max Price", f"${df['Price'].max():,.2f}")
         col3.metric("Min Price", f"${df['Price'].min():,.2f}")
@@ -200,7 +201,7 @@ if st.sidebar.button("🚀 Run Forecast"):
 
             st.dataframe(yearly_df)
 
-        st.success("Forecast completed successfully!"))
+        st.success("Forecast completed successfully!")
 
     # ======================
     # KPI METRICS
