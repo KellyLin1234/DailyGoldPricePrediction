@@ -32,7 +32,7 @@ gb = joblib.load("models/gradient_boosting_log.pkl")
 features = joblib.load("models/features.pkl")
 
 # ======================
-# SIDEBAR SETTINGS
+# SIDEBAR
 # ======================
 st.sidebar.title("Forecast Settings")
 
@@ -50,7 +50,7 @@ mode = st.sidebar.radio(
 )
 
 # ======================
-# FEATURE ENGINEERING (STABLE)
+# FEATURE ENGINEERING
 # ======================
 def create_features(df):
     df = df.copy()
@@ -77,7 +77,13 @@ df_feat = create_features(df)
 history = df_feat['Price_Log'].tolist()
 
 # ======================
-# RF FORECAST (STABLE)
+# SMOOTH FUNCTION
+# ======================
+def smooth(series, window=20):
+    return pd.Series(series).rolling(window, min_periods=1).mean().tolist()
+
+# ======================
+# RF FORECAST
 # ======================
 def rf_forecast(history, steps):
     hist = history.copy()
@@ -90,7 +96,7 @@ def rf_forecast(history, steps):
         x = tmp[features].iloc[-1:].values
         pred = rf.predict(x)[0]
 
-        pred = np.clip(pred, -0.05, 0.05)
+        pred = np.clip(pred, -0.03, 0.03)
 
         next_val = tmp['Lag1'].iloc[-1] + pred
         hist.append(next_val)
@@ -100,7 +106,7 @@ def rf_forecast(history, steps):
     return result
 
 # ======================
-# GB FORECAST (STABLE)
+# GB FORECAST
 # ======================
 def gb_forecast(history, steps):
     hist = history.copy()
@@ -113,7 +119,7 @@ def gb_forecast(history, steps):
         x = tmp[features].iloc[-1:].values
         pred = gb.predict(x)[0]
 
-        pred = np.clip(pred, -0.05, 0.05)
+        pred = np.clip(pred, -0.03, 0.03)
 
         next_val = tmp['Lag1'].iloc[-1] + pred
         hist.append(next_val)
@@ -123,7 +129,7 @@ def gb_forecast(history, steps):
     return result
 
 # ======================
-# HYBRID FORECAST
+# HYBRID
 # ======================
 def hybrid_forecast(history, steps):
     rf_res = rf_forecast(history, steps)
@@ -132,14 +138,18 @@ def hybrid_forecast(history, steps):
     return [0.6*r + 0.4*g for r, g in zip(rf_res, gb_res)]
 
 # ======================
-# YEARLY CONVERSION (FINANCIAL MODE)
+# YEARLY CONVERSION
 # ======================
 def convert_to_yearly(forecast, start_year=2026):
+    forecast = np.array(forecast)
+
     yearly = []
 
     for i in range(0, len(forecast), 365):
         chunk = forecast[i:i+365]
-        yearly.append(np.mean(chunk))
+
+        if len(chunk) > 0:
+            yearly.append(np.median(chunk))
 
     years = list(range(start_year, start_year + len(yearly)))
 
@@ -153,9 +163,7 @@ def convert_to_yearly(forecast, start_year=2026):
 # ======================
 if st.sidebar.button("Run Forecast"):
 
-    # ======================
-    # GENERATE DAILY FORECAST
-    # ======================
+    # generate forecast
     if model_choice == "Random Forest":
         forecast = rf_forecast(history, days)
 
@@ -168,40 +176,42 @@ if st.sidebar.button("Run Forecast"):
     else:
         rf_f = rf_forecast(history, days)
         gb_f = gb_forecast(history, days)
-
         forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
+
+    # SMOOTH FORECAST (IMPORTANT FIX)
+    forecast = smooth(forecast, window=20)
 
     # ======================
     # DAILY MODE
     # ======================
     if mode == "Daily Forecast":
 
-        st.subheader("📈 10-Year Daily Gold Price Forecast")
+        st.subheader("📈 Smoothed 10-Year Daily Gold Forecast")
 
         fig, ax = plt.subplots()
-        ax.plot(forecast)
-        ax.set_title("Daily Gold Price Forecast")
+        ax.plot(forecast, linewidth=2)
+        ax.set_title("Gold Price Forecast")
         ax.set_xlabel("Days")
         ax.set_ylabel("Price")
 
         st.pyplot(fig)
 
-        st.write(pd.DataFrame({"Daily Forecast": forecast}))
+        st.write(pd.DataFrame({"Forecast": forecast}))
 
     # ======================
-    # YEARLY FINANCIAL MODE
+    # YEARLY MODE
     # ======================
     else:
 
         yearly_df = convert_to_yearly(forecast)
 
-        st.subheader("📊 Yearly Financial Forecast (Investment View)")
+        st.subheader("📊 Yearly Financial Forecast")
 
         fig, ax = plt.subplots()
         ax.plot(yearly_df["Year"], yearly_df["Average Gold Price"], marker="o")
         ax.set_title("Yearly Gold Price Trend")
         ax.set_xlabel("Year")
-        ax.set_ylabel("Average Price")
+        ax.set_ylabel("Price")
 
         st.pyplot(fig)
 
