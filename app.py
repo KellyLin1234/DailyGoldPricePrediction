@@ -2,68 +2,126 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib.pyplot as plt
 
 # ======================
-# 1. LOAD MODELS
+# PAGE SETUP
 # ======================
-model = joblib.load("model.pkl")
-scaler = joblib.load("scaler.pkl")
-features = joblib.load("features.pkl")
+st.set_page_config(page_title="Gold Price Predictor", layout="wide")
+
+st.title("💰 Gold Price Prediction App (Fixed Version)")
+st.write("Clean forecasting with correct feature alignment + recursive prediction")
 
 # ======================
-# 2. LOAD DATA
+# LOAD MODEL + SCALER
 # ======================
-df = pd.read_csv("data/Gold Price.csv")
-df = df.sort_values("Date")
+@st.cache_resource
+def load_assets():
+    model = joblib.load("models/model.pkl")
+    scaler = joblib.load("models/scaler.pkl")
+    features = joblib.load("models/feature_columns.pkl")
+    return model, scaler, features
+
+model, scaler, features = load_assets()
 
 # ======================
-# 3. APP UI
+# LOAD DATA
 # ======================
-st.title("💰 Gold Price Prediction App")
+@st.cache_data
+def load_data():
+    df = pd.read_csv("data/Gold Price.csv")  # adjust path if needed
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.sort_values("Date")
+    df = df.reset_index(drop=True)
+    return df
 
-years = st.slider("Years to Predict", 1, 10, 1)
-
-# ======================
-# 4. PREP INPUT
-# ======================
-df["Close_lag1"] = df["Close"].shift(1)
-df["Close_lag2"] = df["Close"].shift(2)
-df = df.dropna()
-
-X = df[features]
-
-# IMPORTANT: match training scaler
-X_scaled = scaler.transform(X)
+df = load_data()
 
 # ======================
-# 5. FORECAST FUNCTION
+# CREATE LAG FEATURES
 # ======================
-def forecast(last_row, steps):
-    preds = []
+def create_features(data):
+    data = data.copy()
 
-    row = last_row.copy()
+    data["lag1"] = data["Close"].shift(1)
+    data["lag2"] = data["Close"].shift(2)
+    data["lag3"] = data["Close"].shift(3)
+
+    data = data.dropna()
+    return data
+
+df_feat = create_features(df)
+
+# ======================
+# SIDEBAR SETTINGS
+# ======================
+st.sidebar.header("Forecast Settings")
+steps = st.sidebar.slider("Years to Predict", 1, 10, 5)
+
+# ======================
+# PREDICTION INPUT
+# ======================
+def get_last_input(df_feat):
+    last_row = df_feat[features].iloc[-1].values
+    return last_row
+
+# ======================
+# RECURSIVE FORECAST
+# ======================
+def forecast(model, scaler, last_input, steps):
+    predictions = []
+    current = last_input.copy()
 
     for _ in range(steps):
-        X_input = scaler.transform([row])
-        pred = model.predict(X_input)[0]
-        preds.append(pred)
+        X = current.reshape(1, -1)
+        X_scaled = scaler.transform(X)
 
-        # update lag features correctly
-        row["Close_lag2"] = row["Close_lag1"]
-        row["Close_lag1"] = pred
-        row["Close"] = pred
+        pred = model.predict(X_scaled)[0]
+        predictions.append(pred)
 
-    return preds
+        # shift lag values
+        current = np.roll(current, 1)
+        current[0] = pred  # update lag1 with new prediction
+
+    return predictions
 
 # ======================
-# 6. RUN FORECAST
+# RUN FORECAST
 # ======================
-if st.button("Predict"):
-    last_row = df[features].iloc[-1].copy()
+last_input = get_last_input(df_feat)
+preds = forecast(model, scaler, last_input, steps)
 
-    steps = years * 365
-    preds = forecast(last_row, steps)
+# create future dates
+last_date = df_feat["Date"].iloc[-1]
+future_dates = pd.date_range(last_date, periods=steps + 1, freq="Y")[1:]
 
-    st.write("Prediction completed")
+# ======================
+# DISPLAY RESULTS
+# ======================
+st.subheader("📊 Forecast Results")
 
-    st.line_chart(preds)
+forecast_df = pd.DataFrame({
+    "Date": future_dates,
+    "Predicted Price": preds
+})
+
+st.dataframe(forecast_df)
+
+# ======================
+# PLOT
+# ======================
+fig, ax = plt.subplots()
+
+ax.plot(df_feat["Date"].tail(100), df_feat["Close"].tail(100), label="Historical")
+ax.plot(forecast_df["Date"], forecast_df["Predicted Price"], label="Forecast")
+
+ax.set_title("Gold Price Forecast")
+ax.legend()
+
+st.pyplot(fig)
+
+# ======================
+# METRICS (optional simple check)
+# ======================
+st.subheader("📉 Model Info")
+st.write("Features used:", features)
