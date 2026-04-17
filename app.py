@@ -83,15 +83,18 @@ def yearly_forecast(model, history, years):
 
     for _ in range(years):
 
-        tmp = pd.DataFrame({"Price_Log": hist})
-        tmp = create_features(tmp)
+        latest = build_latest_features(hist)
 
-        x = tmp[features].iloc[-1:].values
+        x = latest[features].values.reshape(1, -1)
+
+        # safety check (IMPORTANT)
+        if x.shape[1] != len(features):
+            raise ValueError(f"Feature mismatch: {x.shape[1]} vs {len(features)}")
+
         pred = model.predict(x)[0]
-
         pred = np.clip(pred, -0.03, 0.03)
 
-        next_val = tmp['Lag1'].iloc[-1] + pred
+        next_val = latest['Lag1'] + pred
         hist.append(next_val)
 
         result.append(np.exp(next_val))
