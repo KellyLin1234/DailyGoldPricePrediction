@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 # ======================
 # PAGE CONFIG
 # ======================
-st.set_page_config(page_title="Gold Forecast (Yearly)", layout="wide")
+st.set_page_config(page_title="Gold Forecast (Yearly Fast Mode)", layout="wide")
 
 # ======================
 # LOAD DATA
@@ -50,20 +50,18 @@ def create_features(df):
 
     return df.dropna()
 
+
 df_feat = create_features(df)
-
-# FIX: prevent NameError
-history = df_feat['Price_Log'].values.tolist()
-
-latest_row = df_feat[features].iloc[-1:].values
-
+history = df_feat['Price_Log'].tolist()
 
 # ======================
-# FAST YEARLY FORECAST (NO LOOP FORECAST)
+# FAST YEARLY FORECAST ENGINE
 # ======================
-def yearly_forecast(model, history, steps):
-    preds = []
+def yearly_forecast(model, history, years):
     hist = history.copy()
+    predictions = []
+
+    steps = years  # yearly forecast = 1 step per year
 
     for _ in range(steps):
 
@@ -78,53 +76,59 @@ def yearly_forecast(model, history, steps):
         next_val = tmp['Lag1'].iloc[-1] + pred
         hist.append(next_val)
 
-        preds.append(np.exp(next_val))
+        predictions.append(np.exp(next_val))
 
-    return preds
+    return predictions
+
+
+def hybrid_forecast(history, years):
+    rf_pred = yearly_forecast(rf, history, years)
+    gb_pred = yearly_forecast(gb, history, years)
+
+    return [(r + g) / 2 for r, g in zip(rf_pred, gb_pred)]
 
 
 # ======================
 # SIDEBAR
 # ======================
 years = st.sidebar.slider("Forecast Years", 1, 10, 10)
-model_choice = st.sidebar.selectbox("Model", ["Random Forest", "Gradient Boosting", "Hybrid"])
+
+model_choice = st.sidebar.selectbox(
+    "Model",
+    ["Random Forest", "Gradient Boosting", "Hybrid"]
+)
 
 # ======================
-# RUN
+# RUN FORECAST
 # ======================
 if st.sidebar.button("🚀 Run Forecast"):
 
-if model_choice == "Random Forest":
-    forecast = yearly_forecast(rf, history, years)
+    if model_choice == "Random Forest":
+        forecast = yearly_forecast(rf, history, years)
 
-elif model_choice == "Gradient Boosting":
-    forecast = yearly_forecast(gb, history, years)
+    elif model_choice == "Gradient Boosting":
+        forecast = yearly_forecast(gb, history, years)
 
-else:
-    rf_f = yearly_forecast(rf, history, years)
-    gb_f = yearly_forecast(gb, history, years)
-
-    forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
-
-forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
+    else:
+        forecast = hybrid_forecast(history, years)
 
     # ======================
     # DISPLAY
     # ======================
-    st.subheader("📊 Yearly Gold Forecast (FAST MODE)")
+    st.subheader("📊 Yearly Gold Price Forecast (FAST MODE)")
 
-    years_list = list(range(2026, 2026 + years))
+    year_labels = list(range(2026, 2026 + years))
 
     fig, ax = plt.subplots()
-    ax.plot(years_list, forecast, marker="o")
-    ax.set_title("Gold Price Forecast")
+    ax.plot(year_labels, forecast, marker="o")
+    ax.set_title("Gold Price Forecast (Yearly)")
     ax.set_xlabel("Year")
     ax.set_ylabel("Price")
 
     st.pyplot(fig)
 
     st.dataframe(pd.DataFrame({
-        "Year": years_list,
+        "Year": year_labels,
         "Forecast Price": forecast
     }))
 
@@ -135,7 +139,7 @@ st.subheader("📁 Latest Data")
 st.dataframe(df.tail())
 
 # ======================
-# EDA & VISUALIZATION DASHBOARD
+# DASHBOARD IMAGES
 # ======================
 st.title("📊 Gold Market Analysis Dashboard")
 
@@ -146,12 +150,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "Model Performance"
 ])
 
-# ======================
-# TAB 1 - PRICE TRENDS
-# ======================
 with tab1:
-    st.subheader("Gold Price Trends (2014–2026)")
-
     st.image("plot_graph/Daily Gold Price Trend from 2014 to 2026.png")
     st.image("plot_graph/Historical price trends of gold (2014-2026).png")
     st.image("plot_graph/Comparison of Open and Price Trajectories (2014-2026).png")
@@ -159,35 +158,20 @@ with tab1:
     st.image("plot_graph/Daily Highest Price of Gold (2014–2026).png")
     st.image("plot_graph/Daily Lowest Price of Gold (2014–2026).png")
 
-# ======================
-# TAB 2 - VOLUME ANALYSIS
-# ======================
 with tab2:
-    st.subheader("Trading Volume Analysis")
-
     st.image("plot_graph/Average Trading Volume Comparison.png")
     st.image("plot_graph/Gold Trading Volume Over Date.png")
     st.image("plot_graph/Gold Trading Volume Over Year.png")
     st.image("plot_graph/Relationship Between Volume and Gold Price.png")
 
-# ======================
-# TAB 3 - DISTRIBUTION & CORRELATION
-# ======================
 with tab3:
-    st.subheader("Statistical Analysis")
-
     st.image("plot_graph/Distribution of Daily Gold Prices.png")
     st.image("plot_graph/Distribution of Gold Price Percentage Change.png")
     st.image("plot_graph/Correlation between Open and Price.png")
     st.image("plot_graph/Market Volatility Comparison.png")
     st.image("plot_graph/Gold Price Time Series with Holiday Events.png")
 
-# ======================
-# TAB 4 - MODEL PERFORMANCE
-# ======================
 with tab4:
-    st.subheader("Model Evaluation Results")
-
     st.image("plot_graph/mae_comparison.png")
     st.image("plot_graph/mape_comparison.png")
     st.image("plot_graph/rmse_comparison.png")
