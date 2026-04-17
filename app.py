@@ -4,7 +4,6 @@ import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
 from collections import deque
-from tensorflow.keras.models import load_model
 
 # ======================
 # PAGE CONFIG
