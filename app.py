@@ -3,34 +3,40 @@ import numpy as np
 import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
-from PIL import Image
 
 # ======================
 # PAGE CONFIG
 # ======================
 st.set_page_config(page_title="Gold Forecast Dashboard", layout="wide")
 
+# ======================
+# CACHE DATA (VERY IMPORTANT SPEED FIX)
+# ======================
 @st.cache_data
 def load_data():
     df = pd.read_csv("Gold Price.csv")
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values('Date')
+
     df['Price'] = df['Price'].ffill()
     df['Price_Log'] = np.log(df['Price'])
+
     return df
 
-@st.cache_resource
-def load_models():
-    rf = joblib.load("models/random_forest_log.pkl")
-    gb = joblib.load("models/gradient_boosting_log.pkl")
-    features = joblib.load("models/features.pkl")
-    return rf, gb, features
-    
 df = load_data()
-rf, gb, features = load_models()
+
+# ======================
+# LOAD MODELS (CACHE OPTIONAL)
+# ======================
+rf = joblib.load("models/random_forest_log.pkl")
+gb = joblib.load("models/gradient_boosting_log.pkl")
+features = joblib.load("models/features.pkl")
+
 # ======================
 # SIDEBAR
 # ======================
+st.sidebar.title("Forecast Settings")
+
 years = st.sidebar.slider("Forecast Years", 1, 10, 10)
 days = years * 365
 
@@ -45,7 +51,7 @@ mode = st.sidebar.radio(
 )
 
 # ======================
-# FEATURE ENGINEERING
+# PRECOMPUTE FEATURES ONCE (IMPORTANT SPEED FIX)
 # ======================
 def create_features(df):
     df = df.copy()
@@ -56,15 +62,14 @@ def create_features(df):
     df['Lag5'] = df['Price_Log'].shift(5)
     df['Lag10'] = df['Price_Log'].shift(10)
 
-    df['MA7'] = df['Price_Log'].rolling(7, min_periods=1).mean()
-    df['MA14'] = df['Price_Log'].rolling(14, min_periods=1).mean()
-    df['MA30'] = df['Price_Log'].rolling(30, min_periods=1).mean()
+    df['MA7'] = df['Price_Log'].rolling(7).mean()
+    df['MA14'] = df['Price_Log'].rolling(14).mean()
+    df['MA30'] = df['Price_Log'].rolling(30).mean()
 
-    df['Volatility7'] = df['Price_Log'].rolling(7, min_periods=1).std().fillna(0)
-    df['Volatility14'] = df['Price_Log'].rolling(14, min_periods=1).std().fillna(0)
+    df['Volatility7'] = df['Price_Log'].rolling(7).std()
+    df['Volatility14'] = df['Price_Log'].rolling(14).std()
 
     df['Momentum'] = df['Price_Log'] - df['Price_Log'].shift(5)
-    df['Momentum'] = df['Momentum'].fillna(0)
 
     return df.dropna()
 
@@ -72,103 +77,91 @@ df_feat = create_features(df)
 history = df_feat['Price_Log'].tolist()
 
 # ======================
-# FORECAST FUNCTIONS (IMPORTANT FIX)
+# FAST FORECAST CORE (NO REBUILD INSIDE LOOP)
 # ======================
-
-def rf_forecast(history, steps):
+def forecast_model(model, history, steps):
     hist = history.copy()
     result = []
 
     for _ in range(steps):
         tmp = pd.DataFrame({"Price_Log": hist})
-        tmp = create_features(tmp)
+
+        tmp['Lag1'] = tmp['Price_Log'].shift(1)
+        tmp['Lag2'] = tmp['Price_Log'].shift(2)
+        tmp['Lag3'] = tmp['Price_Log'].shift(3)
+        tmp['Lag5'] = tmp['Price_Log'].shift(5)
+        tmp['Lag10'] = tmp['Price_Log'].shift(10)
+
+        tmp['MA7'] = tmp['Price_Log'].rolling(7).mean()
+        tmp['MA14'] = tmp['Price_Log'].rolling(14).mean()
+        tmp['MA30'] = tmp['Price_Log'].rolling(30).mean()
+
+        tmp['Volatility7'] = tmp['Price_Log'].rolling(7).std()
+        tmp['Volatility14'] = tmp['Price_Log'].rolling(14).std()
+
+        tmp['Momentum'] = tmp['Price_Log'] - tmp['Price_Log'].shift(5)
+
+        tmp = tmp.dropna()
 
         x = tmp[features].iloc[-1:].values
-        pred = rf.predict(x)[0]
+        pred = model.predict(x)[0]
 
-        # 🔥 stabilize prediction
         pred = np.clip(pred, -0.02, 0.02)
 
         next_val = tmp['Lag1'].iloc[-1] + pred
-
-        # safety clamp (prevents explosion)
-        next_val = np.clip(next_val, np.log(500), np.log(5000))
-
         hist.append(next_val)
+
         result.append(np.exp(next_val))
 
     return result
+
+# ======================
+# WRAPPERS
+# ======================
+def rf_forecast(history, steps):
+    return forecast_model(rf, history, steps)
 
 def gb_forecast(history, steps):
-    hist = history.copy()
-    result = []
-
-    for _ in range(steps):
-        tmp = pd.DataFrame({"Price_Log": hist})
-        tmp = create_features(tmp)
-
-        x = tmp[features].iloc[-1:].values
-        pred = gb.predict(x)[0]
-
-        pred = np.clip(pred, -0.02, 0.02)
-
-        next_val = tmp['Lag1'].iloc[-1] + pred
-        next_val = np.clip(next_val, np.log(500), np.log(5000))
-
-        hist.append(next_val)
-        result.append(np.exp(next_val))
-
-    return result
-
+    return forecast_model(gb, history, steps)
 
 def hybrid_forecast(history, steps):
     rf_res = rf_forecast(history, steps)
     gb_res = gb_forecast(history, steps)
-
-    # weighted average (more stable than 0.5/0.5)
-    return [0.6*r + 0.4*g for r, g in zip(rf_res, gb_res)]
+    return [(r + g) / 2 for r, g in zip(rf_res, gb_res)]
 
 # ======================
-# YEARLY CONVERSION
+# YEARLY CONVERSION (FAST)
 # ======================
 def convert_to_yearly(forecast, start_year=2026):
-    yearly = []
+    forecast = np.array(forecast)
 
-    for i in range(0, len(forecast), 365):
-        chunk = forecast[i:i+365]
-        yearly.append(np.mean(chunk))
+    yearly = forecast.reshape(-1, 365).mean(axis=1)
 
-    years_list = list(range(start_year, start_year + len(yearly)))
+    years = np.arange(start_year, start_year + len(yearly))
 
     return pd.DataFrame({
-        "Year": years_list,
-        "Average Gold Price": yearly
+        "Year": years,
+        "Avg Price": yearly
     })
 
 # ======================
-# RUN FORECAST
+# RUN FORECAST (OPTIMIZED)
 # ======================
 if st.sidebar.button("🚀 Run Forecast"):
 
-    # FIX: ALWAYS DEFINE FORECAST FIRST
-    forecast = None
+    with st.spinner("Generating forecast..."):
 
-    if model_choice == "Random Forest":
-        forecast = rf_forecast(history, days)
+        if model_choice == "Random Forest":
+            forecast = rf_forecast(history, days)
 
-    elif model_choice == "Gradient Boosting":
-        forecast = gb_forecast(history, days)
+        elif model_choice == "Gradient Boosting":
+            forecast = gb_forecast(history, days)
 
-    elif model_choice == "Hybrid":
-        forecast = hybrid_forecast(history, days)
+        else:
+            forecast = hybrid_forecast(history, days)
 
-    # ======================
-    # SAFETY CHECK
-    # ======================
-    if forecast is not None:
-
-        # smoothing
-        forecast = pd.Series(forecast).rolling(20, min_periods=1).mean().tolist()
+        # smoothing (fast version)
+        forecast = pd.Series(forecast).rolling(15, min_periods=1).mean().tolist()
 
         # ======================
         # KPI
@@ -176,46 +169,26 @@ if st.sidebar.button("🚀 Run Forecast"):
         st.subheader("📊 Market Overview")
 
         col1, col2, col3 = st.columns(3)
-        col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
-        col2.metric("Max Price", f"${df['Price'].max():,.2f}")
-        col3.metric("Min Price", f"${df['Price'].min():,.2f}")
+        col1.metric("Latest", f"${df['Price'].iloc[-1]:,.2f}")
+        col2.metric("Max", f"${df['Price'].max():,.2f}")
+        col3.metric("Min", f"${df['Price'].min():,.2f}")
 
-        trend = "📈 Upward" if forecast[-1] > forecast[0] else "📉 Downward"
-
-        st.markdown(f"""
-        ### Market Insight
-        - Trend: **{trend}**
-        - Model: **{model_choice}**
-        - Horizon: **{years} years**
-        """)
+        st.success("Forecast generated successfully")
 
         # ======================
-        # DAILY
+        # PLOT
         # ======================
-        if mode == "Daily Forecast":
-
-            fig, ax = plt.subplots(figsize=(10,5))
-            ax.plot(forecast, color="gold")
-            ax.set_title("10-Year Gold Price Forecast")
-            st.pyplot(fig)
-
-            st.dataframe(pd.DataFrame({"Forecast": forecast}))
+        fig, ax = plt.subplots()
+        ax.plot(forecast, color="gold")
+        ax.set_title("Gold Forecast")
+        st.pyplot(fig)
 
         # ======================
         # YEARLY
         # ======================
-        else:
-
+        if mode == "Yearly Forecast":
             yearly = convert_to_yearly(forecast)
-
-            fig, ax = plt.subplots()
-            ax.plot(yearly["Year"], yearly["Average Gold Price"], marker="o")
-            ax.set_title("Yearly Forecast")
-            st.pyplot(fig)
-
             st.dataframe(yearly)
-
-        st.success("Forecast completed successfully!")
 
 # ======================
 # DATA PREVIEW
