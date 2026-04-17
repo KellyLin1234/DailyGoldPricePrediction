@@ -47,8 +47,8 @@ model_choice = st.sidebar.selectbox(
 # ======================
 # FEATURE ENGINEERING (ONLY FOR LAST STATE)
 # ======================
-def create_features(df):
-    df = df.copy()
+def build_latest_features(hist):
+    df = pd.DataFrame({"Price_Log": hist})
 
     df['Lag1'] = df['Price_Log'].shift(1)
     df['Lag2'] = df['Price_Log'].shift(2)
@@ -65,18 +65,9 @@ def create_features(df):
 
     df['Momentum'] = df['Price_Log'] - df['Price_Log'].shift(5)
 
-    # ❌ REMOVE FULL DROPNA
-    return df
-df_feat = create_features(df)
-df_feat = df_feat.dropna()
-# ======================
-# GET LAST STATE ONLY (KEY SPEED FIX)
-# ======================
-history = df_feat['Price_Log'].tolist()
+    df = df.dropna()
 
-# ======================
-# FAST YEARLY FORECAST (NO DAILY LOOP)
-# ======================
+    return df.iloc[-1]
 def yearly_forecast(model, history, years):
     hist = history.copy()
     result = []
@@ -86,10 +77,6 @@ def yearly_forecast(model, history, years):
         latest = build_latest_features(hist)
 
         x = latest[features].values.reshape(1, -1)
-
-        # safety check (IMPORTANT)
-        if x.shape[1] != len(features):
-            raise ValueError(f"Feature mismatch: {x.shape[1]} vs {len(features)}")
 
         pred = model.predict(x)[0]
         pred = np.clip(pred, -0.03, 0.03)
