@@ -11,41 +11,6 @@ from PIL import Image
 st.set_page_config(page_title="Gold Forecast Dashboard", layout="wide")
 
 # ======================
-# 🎨 CUSTOM GOLD THEME UI
-# ======================
-st.markdown("""
-    <style>
-        .main {
-            background-color: #0E1117;
-        }
-
-        h1, h2, h3 {
-            color: #D4AF37;
-        }
-
-        .stMetric {
-            background-color: #1C1F26;
-            padding: 15px;
-            border-radius: 12px;
-        }
-
-        .stButton>button {
-            background-color: #D4AF37;
-            color: black;
-            font-weight: bold;
-            border-radius: 10px;
-        }
-
-        .stSidebar {
-            background-color: #11151C;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-def load_img(path):
-    return Image.open(path)
-
-# ======================
 # LOAD DATA
 # ======================
 df = pd.read_csv("Gold Price.csv")
@@ -66,20 +31,17 @@ features = joblib.load("models/features.pkl")
 # ======================
 # SIDEBAR
 # ======================
-st.sidebar.title("📊 Forecast Settings")
-st.sidebar.markdown("### Model Control Panel")
-
 years = st.sidebar.slider("Forecast Years", 1, 10, 10)
 days = years * 365
 
 model_choice = st.sidebar.selectbox(
     "Model",
-    ["Random Forest", "Gradient Boosting", "Hybrid", "All"]
+    ["Random Forest", "Gradient Boosting", "Hybrid"]
 )
 
 mode = st.sidebar.radio(
     "Forecast Mode",
-    ["Daily Forecast", "Yearly Financial Forecast"]
+    ["Daily Forecast", "Yearly Forecast"]
 )
 
 # ======================
@@ -110,18 +72,78 @@ df_feat = create_features(df)
 history = df_feat['Price_Log'].tolist()
 
 # ======================
-# SMOOTH FUNCTION
+# FORECAST FUNCTIONS (IMPORTANT FIX)
 # ======================
-def smooth(series, window=20):
-    return pd.Series(series).rolling(window, min_periods=1).mean().tolist()
 
-forecast = None
+def rf_forecast(history, steps):
+    hist = history.copy()
+    result = []
 
+    for _ in range(steps):
+        tmp = pd.DataFrame({"Price_Log": hist})
+        tmp = create_features(tmp)
+
+        x = tmp[features].iloc[-1:].values
+        pred = rf.predict(x)[0]
+
+        next_val = tmp['Lag1'].iloc[-1] + np.clip(pred, -0.03, 0.03)
+        hist.append(next_val)
+
+        result.append(np.exp(next_val))
+
+    return result
+
+
+def gb_forecast(history, steps):
+    hist = history.copy()
+    result = []
+
+    for _ in range(steps):
+        tmp = pd.DataFrame({"Price_Log": hist})
+        tmp = create_features(tmp)
+
+        x = tmp[features].iloc[-1:].values
+        pred = gb.predict(x)[0]
+
+        next_val = tmp['Lag1'].iloc[-1] + np.clip(pred, -0.03, 0.03)
+        hist.append(next_val)
+
+        result.append(np.exp(next_val))
+
+    return result
+
+
+def hybrid_forecast(history, steps):
+    rf_res = rf_forecast(history, steps)
+    gb_res = gb_forecast(history, steps)
+
+    return [(r + g) / 2 for r, g in zip(rf_res, gb_res)]
+
+# ======================
+# YEARLY CONVERSION
+# ======================
+def convert_to_yearly(forecast, start_year=2026):
+    yearly = []
+
+    for i in range(0, len(forecast), 365):
+        chunk = forecast[i:i+365]
+        yearly.append(np.mean(chunk))
+
+    years_list = list(range(start_year, start_year + len(yearly)))
+
+    return pd.DataFrame({
+        "Year": years_list,
+        "Average Gold Price": yearly
+    })
+
+# ======================
+# RUN FORECAST
+# ======================
 if st.sidebar.button("🚀 Run Forecast"):
 
-    # ======================
-    # GENERATE FORECAST
-    # ======================
+    # FIX: ALWAYS DEFINE FORECAST FIRST
+    forecast = None
+
     if model_choice == "Random Forest":
         forecast = rf_forecast(history, days)
 
@@ -131,136 +153,60 @@ if st.sidebar.button("🚀 Run Forecast"):
     elif model_choice == "Hybrid":
         forecast = hybrid_forecast(history, days)
 
-    else:
-        rf_f = rf_forecast(history, days)
-        gb_f = gb_forecast(history, days)
-        forecast = [(r + g) / 2 for r, g in zip(rf_f, gb_f)]
-
     # ======================
     # SAFETY CHECK
     # ======================
     if forecast is not None:
 
-        forecast = smooth(forecast, 20)
+        # smoothing
+        forecast = pd.Series(forecast).rolling(20, min_periods=1).mean().tolist()
 
         # ======================
-        # KPI METRICS (ONLY ONCE)
+        # KPI
         # ======================
-        st.subheader("📌 Market Summary")
+        st.subheader("📊 Market Overview")
 
         col1, col2, col3 = st.columns(3)
-
         col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
         col2.metric("Max Price", f"${df['Price'].max():,.2f}")
         col3.metric("Min Price", f"${df['Price'].min():,.2f}")
 
-        trend = "📈 Upward Trend" if forecast[-1] > forecast[0] else "📉 Downward Trend"
+        trend = "📈 Upward" if forecast[-1] > forecast[0] else "📉 Downward"
 
         st.markdown(f"""
-        ### 📊 Market Insight
+        ### Market Insight
         - Trend: **{trend}**
-        - Forecast Horizon: **{years} years**
         - Model: **{model_choice}**
+        - Horizon: **{years} years**
         """)
 
         # ======================
-        # DAILY MODE
+        # DAILY
         # ======================
         if mode == "Daily Forecast":
 
-            st.subheader("📈 Smoothed Forecast")
-
             fig, ax = plt.subplots(figsize=(10,5))
-            ax.plot(forecast, linewidth=2, color="#D4AF37")
-            ax.set_title("Gold Price Forecast")
-            ax.set_xlabel("Days")
-            ax.set_ylabel("Price")
-
+            ax.plot(forecast, color="gold")
+            ax.set_title("10-Year Gold Price Forecast")
             st.pyplot(fig)
 
             st.dataframe(pd.DataFrame({"Forecast": forecast}))
 
         # ======================
-        # YEARLY MODE
+        # YEARLY
         # ======================
         else:
 
-            yearly_df = convert_to_yearly(forecast)
-
-            st.subheader("📊 Yearly Financial Forecast")
+            yearly = convert_to_yearly(forecast)
 
             fig, ax = plt.subplots()
-            ax.plot(yearly_df["Year"], yearly_df["Average Gold Price"],
-                    marker="o", color="#D4AF37")
-
-            ax.set_title("Yearly Gold Price Trend")
-            ax.set_xlabel("Year")
-            ax.set_ylabel("Price")
-
+            ax.plot(yearly["Year"], yearly["Average Gold Price"], marker="o")
+            ax.set_title("Yearly Forecast")
             st.pyplot(fig)
 
-            st.dataframe(yearly_df)
+            st.dataframe(yearly)
 
         st.success("Forecast completed successfully!")
-
-    # ======================
-    # KPI METRICS
-    # ======================
-    st.subheader("📌 Market Summary")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
-    col2.metric("Max Price", f"${df['Price'].max():,.2f}")
-    col3.metric("Min Price", f"${df['Price'].min():,.2f}")
-
-    # trend insight
-    trend = "📈 Upward Trend" if forecast[-1] > forecast[0] else "📉 Downward Trend"
-
-    st.markdown(f"""
-    ### 📊 Market Insight
-    - Trend: **{trend}**
-    - Forecast Horizon: **{years} years**
-    - Model: **{model_choice}**
-    """)
-
-    # ======================
-    # DAILY MODE
-    # ======================
-    if mode == "Daily Forecast":
-
-        st.subheader("📈 Smoothed 10-Year Daily Forecast")
-
-        fig, ax = plt.subplots(figsize=(10,5))
-        ax.plot(forecast, linewidth=2, color="#D4AF37")
-        ax.set_title("Gold Price Forecast")
-        ax.set_xlabel("Days")
-        ax.set_ylabel("Price")
-
-        st.pyplot(fig)
-
-        st.dataframe(pd.DataFrame({"Forecast": forecast}))
-
-    # ======================
-    # YEARLY MODE
-    # ======================
-    else:
-
-        yearly_df = convert_to_yearly(forecast)
-
-        st.subheader("📊 Yearly Financial Forecast")
-
-        fig, ax = plt.subplots()
-        ax.plot(yearly_df["Year"], yearly_df["Average Gold Price"], marker="o", color="#D4AF37")
-        ax.set_title("Yearly Gold Price Trend")
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Price")
-
-        st.pyplot(fig)
-
-        st.dataframe(yearly_df)
-
-    st.success("Forecast completed successfully!")
 
 # ======================
 # DATA PREVIEW
