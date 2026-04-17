@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 # ======================
 # PAGE CONFIG
 # ======================
-st.set_page_config(page_title="Gold Forecast Dashboard", layout="wide")
+st.set_page_config(page_title="Gold Forecast (Yearly Fast Mode)", layout="wide")
 
 # ======================
-# CACHE DATA (VERY IMPORTANT SPEED FIX)
+# LOAD DATA (FAST)
 # ======================
 @st.cache_data
 def load_data():
@@ -26,7 +26,7 @@ def load_data():
 df = load_data()
 
 # ======================
-# LOAD MODELS (CACHE OPTIONAL)
+# LOAD MODELS
 # ======================
 rf = joblib.load("models/random_forest_log.pkl")
 gb = joblib.load("models/gradient_boosting_log.pkl")
@@ -38,20 +38,14 @@ features = joblib.load("models/features.pkl")
 st.sidebar.title("Forecast Settings")
 
 years = st.sidebar.slider("Forecast Years", 1, 10, 10)
-days = years * 365
 
 model_choice = st.sidebar.selectbox(
     "Model",
     ["Random Forest", "Gradient Boosting", "Hybrid"]
 )
 
-mode = st.sidebar.radio(
-    "Forecast Mode",
-    ["Daily Forecast", "Yearly Forecast"]
-)
-
 # ======================
-# PRECOMPUTE FEATURES ONCE (IMPORTANT SPEED FIX)
+# FEATURE ENGINEERING (ONLY FOR LAST STATE)
 # ======================
 def create_features(df):
     df = df.copy()
@@ -74,39 +68,28 @@ def create_features(df):
     return df.dropna()
 
 df_feat = create_features(df)
+
+# ======================
+# GET LAST STATE ONLY (KEY SPEED FIX)
+# ======================
 history = df_feat['Price_Log'].tolist()
 
 # ======================
-# FAST FORECAST CORE (NO REBUILD INSIDE LOOP)
+# FAST YEARLY FORECAST (NO DAILY LOOP)
 # ======================
-def forecast_model(model, history, steps):
+def yearly_forecast(model, history, years):
     hist = history.copy()
     result = []
 
-    for _ in range(steps):
+    for _ in range(years):
+
         tmp = pd.DataFrame({"Price_Log": hist})
-
-        tmp['Lag1'] = tmp['Price_Log'].shift(1)
-        tmp['Lag2'] = tmp['Price_Log'].shift(2)
-        tmp['Lag3'] = tmp['Price_Log'].shift(3)
-        tmp['Lag5'] = tmp['Price_Log'].shift(5)
-        tmp['Lag10'] = tmp['Price_Log'].shift(10)
-
-        tmp['MA7'] = tmp['Price_Log'].rolling(7).mean()
-        tmp['MA14'] = tmp['Price_Log'].rolling(14).mean()
-        tmp['MA30'] = tmp['Price_Log'].rolling(30).mean()
-
-        tmp['Volatility7'] = tmp['Price_Log'].rolling(7).std()
-        tmp['Volatility14'] = tmp['Price_Log'].rolling(14).std()
-
-        tmp['Momentum'] = tmp['Price_Log'] - tmp['Price_Log'].shift(5)
-
-        tmp = tmp.dropna()
+        tmp = create_features(tmp)
 
         x = tmp[features].iloc[-1:].values
         pred = model.predict(x)[0]
 
-        pred = np.clip(pred, -0.02, 0.02)
+        pred = np.clip(pred, -0.03, 0.03)
 
         next_val = tmp['Lag1'].iloc[-1] + pred
         hist.append(next_val)
@@ -116,80 +99,77 @@ def forecast_model(model, history, steps):
     return result
 
 # ======================
-# WRAPPERS
+# MODEL WRAPPERS
 # ======================
-def rf_forecast(history, steps):
-    return forecast_model(rf, history, steps)
+def rf_forecast(history, years):
+    return yearly_forecast(rf, history, years)
 
-def gb_forecast(history, steps):
-    return forecast_model(gb, history, steps)
+def gb_forecast(history, years):
+    return yearly_forecast(gb, history, years)
 
-def hybrid_forecast(history, steps):
-    rf_res = rf_forecast(history, steps)
-    gb_res = gb_forecast(history, steps)
+def hybrid_forecast(history, years):
+    rf_res = rf_forecast(history, years)
+    gb_res = gb_forecast(history, years)
     return [(r + g) / 2 for r, g in zip(rf_res, gb_res)]
 
 # ======================
-# YEARLY CONVERSION (FAST)
+# RUN FORECAST
 # ======================
-def convert_to_yearly(forecast, start_year=2026):
-    forecast = np.array(forecast)
+if st.sidebar.button("🚀 Generate Forecast"):
 
-    yearly = forecast.reshape(-1, 365).mean(axis=1)
-
-    years = np.arange(start_year, start_year + len(yearly))
-
-    return pd.DataFrame({
-        "Year": years,
-        "Avg Price": yearly
-    })
-
-# ======================
-# RUN FORECAST (OPTIMIZED)
-# ======================
-if st.sidebar.button("🚀 Run Forecast"):
-
-    with st.spinner("Generating forecast..."):
+    with st.spinner("Generating yearly forecast..."):
 
         if model_choice == "Random Forest":
-            forecast = rf_forecast(history, days)
+            forecast = rf_forecast(history, years)
 
         elif model_choice == "Gradient Boosting":
-            forecast = gb_forecast(history, days)
+            forecast = gb_forecast(history, years)
 
         else:
-            forecast = hybrid_forecast(history, days)
-
-        # smoothing (fast version)
-        forecast = pd.Series(forecast).rolling(15, min_periods=1).mean().tolist()
+            forecast = hybrid_forecast(history, years)
 
         # ======================
-        # KPI
+        # YEAR LABELS
         # ======================
-        st.subheader("📊 Market Overview")
+        start_year = df['Date'].dt.year.max() + 1
+        years_index = list(range(start_year, start_year + len(forecast)))
+
+        yearly_df = pd.DataFrame({
+            "Year": years_index,
+            "Predicted Gold Price": forecast
+        })
+
+        # ======================
+        # METRICS
+        # ======================
+        st.subheader("📊 Forecast Summary")
 
         col1, col2, col3 = st.columns(3)
-        col1.metric("Latest", f"${df['Price'].iloc[-1]:,.2f}")
-        col2.metric("Max", f"${df['Price'].max():,.2f}")
-        col3.metric("Min", f"${df['Price'].min():,.2f}")
-
-        st.success("Forecast generated successfully")
+        col1.metric("Latest Price", f"${df['Price'].iloc[-1]:,.2f}")
+        col2.metric("Forecast Start", f"{start_year}")
+        col3.metric("Years Predicted", f"{years}")
 
         # ======================
         # PLOT
         # ======================
+        st.subheader("📈 Yearly Gold Price Forecast")
+
         fig, ax = plt.subplots()
-        ax.plot(forecast, color="gold")
-        ax.set_title("Gold Forecast")
+        ax.plot(yearly_df["Year"], yearly_df["Predicted Gold Price"],
+                marker="o", color="gold", linewidth=3)
+
+        ax.set_title("Gold Price Forecast (Yearly)")
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Price")
+
         st.pyplot(fig)
 
         # ======================
-        # YEARLY
+        # TABLE
         # ======================
-        if mode == "Yearly Forecast":
-            yearly = convert_to_yearly(forecast)
-            st.dataframe(yearly)
+        st.dataframe(yearly_df)
 
+        st.success("Forecast completed successfully!")
 # ======================
 # DATA PREVIEW
 # ======================
