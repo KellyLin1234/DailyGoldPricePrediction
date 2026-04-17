@@ -41,7 +41,7 @@ days = years * 365
 
 model_choice = st.sidebar.selectbox(
     "Model",
-    ["Random Forest", "Gradient Boosting", "Hybrid", "All"]
+    ["Random Forest", "Gradient Boosting", "Hybrid(BEST)", "All"]
 )
 
 mode = st.sidebar.radio(
