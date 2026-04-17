@@ -17,8 +17,11 @@ st.write("Random Forest Baseline Model (Stable Version)")
 # ======================
 @st.cache_resource
 def load_models():
-    model = joblib.load("rf_model.pkl")
-    scaler = joblib.load("scaler.pkl")
+    model = joblib.load("random_forest_log.pkl")
+    model = joblib.load("gradient_boosting_log.pkl")
+    model = joblib.load("lstm_log.pkl")
+    model = joblib.load("hybrid_log.pkl")
+    scaler = joblib.load("lstm_log_scaler.pkl")
     features = joblib.load("features.pkl")
     return model, scaler, features
 
