@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import joblib
+import tensorflow as tf
 import matplotlib.pyplot as plt
 from collections import deque
 
@@ -27,7 +28,7 @@ rf = joblib.load("models/random_forest_log.pkl")
 gb = joblib.load("models/gradient_boosting_log.pkl")
 features = joblib.load("models/features.pkl")
 
-lstm = load_model("models/lstm_log_model.keras")
+lstm = tf.keras.models.load_model("models/lstm_log_model.keras")
 scaler = joblib.load("models/lstm_log_scaler.pkl")
 
 hybrid = joblib.load("models/hybrid_log.pkl")
