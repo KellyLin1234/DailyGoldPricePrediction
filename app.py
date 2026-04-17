@@ -9,7 +9,6 @@ from datetime import timedelta
 # ==========================================
 st.set_page_config(page_title="Gold Price 10-Year Forecaster", layout="wide")
 st.title("🪙 Gold Price 10-Year Forecaster")
-st.markdown("Predicting daily gold prices using Lightweight Machine Learning (Random Forest & Gradient Boosting).")
 
 # ==========================================
 # CACHED MODEL LOADING
