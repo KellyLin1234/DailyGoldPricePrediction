@@ -117,17 +117,7 @@ forecast_df = pd.DataFrame({
 })
 
 # ======================
-# FORECAST PLOT
-# ======================
-fig, ax = plt.subplots(figsize=(14, 5))
-ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
-ax.set_title("Gold Price Forecast (Hybrid Model - Fixed)")
-ax.set_xlabel("Date")
-ax.set_ylabel("Price")
-st.pyplot(fig)
-
-# ======================
-# SUMMARY
+# MODEL PERFORMANCE VISUALS
 # ======================
 st.subheader("📊 Model Performance Comparison")
 
@@ -145,7 +135,21 @@ st.image("mae_comparison.png", use_container_width=True)
 
 st.markdown("### 📉 MAPE Comparison")
 st.image("mape_comparison.png", use_container_width=True)
-st.subheader("📊 Forecast Summary")
+
+# ======================
+# FORECAST PLOT
+# ======================
+fig, ax = plt.subplots(figsize=(14, 5))
+ax.plot(forecast_df['Date'], forecast_df['Price'], color="green", linewidth=2)
+ax.set_title("Gold Price Forecast (Hybrid Model - Fixed)")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
+st.pyplot(fig)
+
+# ======================
+# SUMMARY
+# ======================
+st.subheader("📊 Model Performance Comparison")
 
 start_price = predictions[0]
 end_price = predictions[-1]
