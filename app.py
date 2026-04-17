@@ -241,12 +241,12 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.subheader("Gold Price Trends (2014–2026)")
 
-    st.image("plot_graph/Daily Gold Price Trend from 2014 to 2026.png"))
-    st.image("plot_graph/Historical price trends of gold (2014-2026).png"))
-    st.image("plot_graph/Comparison of Open and Price Trajectories (2014-2026).png"))
-    st.image("plot_graph/Daily Opening Price Fluctuations (2014-2026).png"))
-    st.image("plot_graph/Daily Highest Price of Gold (2014–2026).png"))
-    st.image("plot_graph/Daily Lowest Price of Gold (2014–2026).png"))
+    st.image("plot_graph/Daily Gold Price Trend from 2014 to 2026.png")
+    st.image("plot_graph/Historical price trends of gold (2014-2026).png")
+    st.image("plot_graph/Comparison of Open and Price Trajectories (2014-2026).png")
+    st.image("plot_graph/Daily Opening Price Fluctuations (2014-2026).png")
+    st.image("plot_graph/Daily Highest Price of Gold (2014–2026).png")
+    st.image("plot_graph/Daily Lowest Price of Gold (2014–2026).png")
 
 # ======================
 # TAB 2 - VOLUME ANALYSIS
@@ -254,10 +254,10 @@ with tab1:
 with tab2:
     st.subheader("Trading Volume Analysis")
 
-    st.image(load_img("plot_graph/Average Trading Volume Comparison.png"))
-    st.image(load_img("plot_graph/Gold Trading Volume Over Date.png"))
-    st.image(load_img("plot_graph/Gold Trading Volume Over Year.png"))
-    st.image(load_img("plot_graph/Relationship Between Volume and Gold Price.png"))
+    st.image("plot_graph/Average Trading Volume Comparison.png")
+    st.image("plot_graph/Gold Trading Volume Over Date.png")
+    st.image("plot_graph/Gold Trading Volume Over Year.png")
+    st.image("plot_graph/Relationship Between Volume and Gold Price.png")
 
 # ======================
 # TAB 3 - DISTRIBUTION & CORRELATION
@@ -265,11 +265,11 @@ with tab2:
 with tab3:
     st.subheader("Statistical Analysis")
 
-    st.image(load_img("plot_graph/Distribution of Daily Gold Prices.png"))
-    st.image(load_img("plot_graph/Distribution of Gold Price Percentage Change.png"))
-    st.image(load_img("plot_graph/Correlation between Open and Price.png"))
-    st.image(load_img("plot_graph/Market Volatility Comparison.png"))
-    st.image(load_img("plot_graph/Gold Price Time Series with Holiday Events.png"))
+    st.image("plot_graph/Distribution of Daily Gold Prices.png")
+    st.image("plot_graph/Distribution of Gold Price Percentage Change.png")
+    st.image("plot_graph/Correlation between Open and Price.png")
+    st.image("plot_graph/Market Volatility Comparison.png")
+    st.image("plot_graph/Gold Price Time Series with Holiday Events.png")
 
 # ======================
 # TAB 4 - MODEL PERFORMANCE
@@ -277,8 +277,8 @@ with tab3:
 with tab4:
     st.subheader("Model Evaluation Results")
 
-    st.image(load_img("plot_graph/mae_comparison.png"))
-    st.image(load_img("plot_graph/mape_comparison.png"))
-    st.image(load_img("plot_graph/rmse_comparison.png"))
-    st.image(load_img("plot_graph/R2_score_comparison.png"))
-    st.image(load_img("plot_graph/model_performance_table.png"))
+    st.image("plot_graph/mae_comparison.png")
+    st.image("plot_graph/mape_comparison.png")
+    st.image("plot_graph/rmse_comparison.png")
+    st.image("plot_graph/R2_score_comparison.png")
+    st.image("plot_graph/model_performance_table.png")
