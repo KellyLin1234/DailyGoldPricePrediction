@@ -10,24 +10,24 @@ from PIL import Image
 # ======================
 st.set_page_config(page_title="Gold Forecast Dashboard", layout="wide")
 
-# ======================
-# LOAD DATA
-# ======================
-df = pd.read_csv("Gold Price.csv")
+@st.cache_data
+def load_data():
+    df = pd.read_csv("Gold Price.csv")
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.sort_values('Date')
+    df['Price'] = df['Price'].ffill()
+    df['Price_Log'] = np.log(df['Price'])
+    return df
 
-df['Date'] = pd.to_datetime(df['Date'])
-df = df.sort_values('Date')
-
-df['Price'] = df['Price'].ffill()
-df['Price_Log'] = np.log(df['Price'])
-
-# ======================
-# LOAD MODELS
-# ======================
-rf = joblib.load("models/random_forest_log.pkl")
-gb = joblib.load("models/gradient_boosting_log.pkl")
-features = joblib.load("models/features.pkl")
-
+@st.cache_resource
+def load_models():
+    rf = joblib.load("models/random_forest_log.pkl")
+    gb = joblib.load("models/gradient_boosting_log.pkl")
+    features = joblib.load("models/features.pkl")
+    return rf, gb, features
+    
+df = load_data()
+rf, gb, features = load_models()
 # ======================
 # SIDEBAR
 # ======================
